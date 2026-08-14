@@ -2,3 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /invite
 Disallow: /application-received.html
+Disallow: /api/
+
+Sitemap: https://nocturnefestival.com/sitemap.xml
