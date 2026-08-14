@@ -6,10 +6,18 @@
   <meta name="theme-color" content="#030303">
   <title>NOCTURNE Festival | Hawai‘i</title>
   <meta name="description" content="NOCTURNE Festival — an invitation-only after-dark experience in Hawai‘i, presented by Wild Ones.">
+  <link rel="canonical" href="https://nocturnefestival.com/">
   <meta property="og:title" content="NOCTURNE Festival">
   <meta property="og:description" content="Something extraordinary is coming. Request an invitation to NOCTURNE.">
-  <meta property="og:image" content="/assets/images/og-nocturne.jpg">
+  <meta property="og:image" content="https://nocturnefestival.com/assets/images/og-nocturne.jpg">
+  <meta property="og:image:alt" content="NOCTURNE Festival">
+  <meta property="og:url" content="https://nocturnefestival.com/">
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="NOCTURNE Festival">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="NOCTURNE Festival">
+  <meta name="twitter:description" content="Something extraordinary is coming. Request an invitation to NOCTURNE.">
+  <meta name="twitter:image" content="https://nocturnefestival.com/assets/images/og-nocturne.jpg">
   <link rel="icon" type="image/png" href="/assets/images/favicon.png">
   <link rel="stylesheet" href="/assets/css/styles.css">
   <script src="/assets/js/app.js" defer></script>
@@ -26,7 +34,7 @@
       <a href="#experience">Experience</a>
       <a href="#invitation">Invitation</a>
       <a href="#faq">FAQ</a>
-      <a href="https://instagram.com/nocturnehawaii" rel="noopener noreferrer">Instagram</a>
+      <a href="https://instagram.com/nocturnehawaii" target="_blank" rel="noopener noreferrer">Instagram</a>
       <a class="nav-cta" href="#apply">Request Invite</a>
     </nav>
   </header>
@@ -38,7 +46,7 @@
       <div class="hero-inner">
         <div class="hero-copy">
           <p class="eyebrow">Presented by Wild Ones · Hawai‘i</p>
-          <img class="hero-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768">
+          <img class="hero-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768" fetchpriority="high">
           <h1>NOCTURNE Festival</h1>
           <p class="hero-tagline">When the sun disappears, something else awakens.</p>
           <p class="hero-sub">NOCTURNE is a curated after-dark festival experience built around electronic music, atmosphere, connection, and the unexpected. Attendance is by invitation only.</p>
@@ -66,37 +74,19 @@
       </div>
 
       <div class="container experience-grid reveal">
-        <article class="experience-card">
-          <div class="num">01</div>
-          <h3>Sound</h3>
-          <p>Electronic music engineered for after dark — from hypnotic builds to peak-hour energy and the moments in between.</p>
-        </article>
-        <article class="experience-card">
-          <div class="num">02</div>
-          <h3>Atmosphere</h3>
-          <p>A cinematic environment shaped by light, shadow, texture, movement, and a distinct NOCTURNE visual language.</p>
-        </article>
-        <article class="experience-card">
-          <div class="num">03</div>
-          <h3>Connection</h3>
-          <p>A curated guest community designed to feel intentional, respectful, expressive, and impossible to replicate by accident.</p>
-        </article>
+        <article class="experience-card"><div class="num">01</div><h3>Sound</h3><p>Electronic music engineered for after dark — from hypnotic builds to peak-hour energy and the moments in between.</p></article>
+        <article class="experience-card"><div class="num">02</div><h3>Atmosphere</h3><p>A cinematic environment shaped by light, shadow, texture, movement, and a distinct NOCTURNE visual language.</p></article>
+        <article class="experience-card"><div class="num">03</div><h3>Connection</h3><p>A curated guest community designed to feel intentional, respectful, expressive, and impossible to replicate by accident.</p></article>
       </div>
     </section>
 
-    <div class="details-strip" aria-hidden="true">
-      <div class="marquee">
-        <span><strong>NOCTURNE</strong> · HAWAI‘I · INVITATION ONLY · PRESENTED BY WILD ONES · AFTER DARK · </span>
-        <span><strong>NOCTURNE</strong> · HAWAI‘I · INVITATION ONLY · PRESENTED BY WILD ONES · AFTER DARK · </span>
-      </div>
-    </div>
+    <div class="details-strip" aria-hidden="true"><div class="marquee"><span><strong>NOCTURNE</strong> · HAWAI‘I · INVITATION ONLY · PRESENTED BY WILD ONES · AFTER DARK · </span><span><strong>NOCTURNE</strong> · HAWAI‘I · INVITATION ONLY · PRESENTED BY WILD ONES · AFTER DARK · </span></div></div>
 
     <section class="section invite-process" id="invitation">
       <div class="container reveal">
         <p class="section-kicker">The Invitation</p>
         <h2 class="section-title">Access is<br><em>intentional.</em></h2>
         <p class="lead" style="max-width:760px">Tickets are not offered through an open public sale. Every guest begins with an application.</p>
-
         <div class="process-grid">
           <article class="process-step"><span>01</span><h3>Apply</h3><p>Tell us who you are, how you found NOCTURNE, and why you want to be part of it.</p></article>
           <article class="process-step"><span>02</span><h3>Review</h3><p>The Wild Ones team reviews each request individually, with safety, fit, and capacity in mind.</p></article>
@@ -119,49 +109,41 @@
         <form id="application-form" class="application-form reveal" name="nocturne-application" method="POST" action="/application-received.html" data-netlify="true" netlify-honeypot="bot-field">
           <input type="hidden" name="form-name" value="nocturne-application">
           <p class="honeypot"><label>Do not fill this out if you are human: <input name="bot-field"></label></p>
-
           <section class="form-section">
             <h3>About you</h3>
             <div class="field-grid">
-              <div class="field"><label for="full_name">Full name *</label><input id="full_name" name="full_name" autocomplete="name" required></div>
-              <div class="field"><label for="preferred_name">Preferred name</label><input id="preferred_name" name="preferred_name" autocomplete="nickname"></div>
-              <div class="field"><label for="email">Email *</label><input id="email" name="email" type="email" autocomplete="email" required></div>
-              <div class="field"><label for="phone">Mobile number *</label><input id="phone" name="phone" type="tel" autocomplete="tel" required></div>
-              <div class="field full"><label for="location">City / state or island *</label><input id="location" name="location" autocomplete="address-level2" required placeholder="Honolulu, O‘ahu"></div>
+              <div class="field"><label for="full_name">Full name *</label><input id="full_name" name="full_name" autocomplete="name" maxlength="120" required></div>
+              <div class="field"><label for="preferred_name">Preferred name</label><input id="preferred_name" name="preferred_name" autocomplete="nickname" maxlength="120"></div>
+              <div class="field"><label for="email">Email *</label><input id="email" name="email" type="email" autocomplete="email" maxlength="254" required></div>
+              <div class="field"><label for="phone">Mobile number *</label><input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40" required></div>
+              <div class="field full"><label for="location">City / state or island *</label><input id="location" name="location" autocomplete="address-level2" maxlength="160" required placeholder="Honolulu, O‘ahu"></div>
             </div>
           </section>
-
           <section class="form-section">
             <h3>Your connection</h3>
             <div class="field-grid">
-              <div class="field"><label for="instagram">Instagram</label><input id="instagram" name="instagram" placeholder="@handle" autocapitalize="off"><small>Optional, but helpful for verification.</small></div>
-              <div class="field"><label for="referral">Who referred you? *</label><input id="referral" name="referral" required placeholder="Name, host, artist, friend, or source"></div>
-              <div class="field full"><label for="community">What music, nightlife, creative, or community spaces are you part of?</label><textarea id="community" name="community" placeholder="A few lines is enough."></textarea></div>
-              <div class="field full"><label for="why_nocturne">Why do you want to attend NOCTURNE? *</label><textarea id="why_nocturne" name="why_nocturne" minlength="50" required placeholder="Tell us what draws you to the experience and the energy you bring."></textarea><small>Minimum 50 characters.</small></div>
-              <div class="field full"><label for="group_names">Applying with anyone else?</label><textarea id="group_names" name="group_names" placeholder="List names if relevant. Each guest should submit their own application."></textarea></div>
+              <div class="field"><label for="instagram">Instagram</label><input id="instagram" name="instagram" maxlength="120" placeholder="@handle" autocapitalize="off"><small>Optional, but helpful for verification.</small></div>
+              <div class="field"><label for="referral">Who referred you? *</label><input id="referral" name="referral" maxlength="160" required placeholder="Name, host, artist, friend, or source"></div>
+              <div class="field full"><label for="community">What music, nightlife, creative, or community spaces are you part of?</label><textarea id="community" name="community" maxlength="1500" placeholder="A few lines is enough."></textarea></div>
+              <div class="field full"><label for="why_nocturne">Why do you want to attend NOCTURNE? *</label><textarea id="why_nocturne" name="why_nocturne" minlength="50" maxlength="2000" required placeholder="Tell us what draws you to the experience and the energy you bring."></textarea><small>Minimum 50 characters.</small></div>
+              <div class="field full"><label for="group_names">Applying with anyone else?</label><textarea id="group_names" name="group_names" maxlength="1000" placeholder="List names if relevant. Each guest should submit their own application."></textarea></div>
             </div>
           </section>
-
           <section class="form-section">
             <h3>Community standard</h3>
-            <label class="check-row"><input type="checkbox" name="conduct_ack" value="yes" required><span>I agree to respect the NOCTURNE <a href="/conduct" target="_blank">Code of Conduct</a>, consent and safety standards, and understand that abusive, predatory, discriminatory, or disruptive behavior is grounds for denied or revoked access.</span></label>
+            <label class="check-row"><input type="checkbox" name="conduct_ack" value="yes" required><span>I agree to respect the NOCTURNE <a href="/conduct" target="_blank" rel="noopener">Code of Conduct</a>, consent and safety standards, and understand that abusive, predatory, discriminatory, or disruptive behavior is grounds for denied or revoked access.</span></label>
             <label class="check-row"><input type="checkbox" name="selection_ack" value="yes" required><span>I understand that this is a request for consideration, not a ticket reservation or guarantee of admission, and that invitations are non-transferable.</span></label>
-            <label class="check-row"><input type="checkbox" name="privacy_ack" value="yes" required><span>I have read the <a href="/privacy" target="_blank">Privacy Notice</a> and consent to the use of my application information for review and event administration.</span></label>
+            <label class="check-row"><input type="checkbox" name="privacy_ack" value="yes" required><span>I have read the <a href="/privacy" target="_blank" rel="noopener">Privacy Notice</a> and consent to the use of my application information for review and event administration.</span></label>
             <label class="check-row"><input type="checkbox" name="marketing_opt_in" value="yes"><span>Keep me informed about NOCTURNE announcements and future Wild Ones experiences. Optional.</span></label>
           </section>
-
-          <div class="form-actions">
-            <button class="btn" type="submit">Submit for Review <span aria-hidden="true">→</span></button>
-            <span class="form-status" role="status" aria-live="polite"></span>
-          </div>
+          <div class="form-actions"><button class="btn" type="submit">Submit for Review <span aria-hidden="true">→</span></button><span class="form-status" role="status" aria-live="polite"></span></div>
         </form>
       </div>
     </section>
 
     <section class="section" id="faq">
       <div class="container reveal">
-        <p class="section-kicker">Questions</p>
-        <h2 class="section-title">What we can<br><em>tell you.</em></h2>
+        <p class="section-kicker">Questions</p><h2 class="section-title">What we can<br><em>tell you.</em></h2>
         <div class="faq-list">
           <div class="faq-item"><button aria-expanded="false"><span>Why is NOCTURNE invitation only?</span><span class="plus">+</span></button><div class="faq-answer"><p>The guest list is part of the experience. Curated access helps us protect the atmosphere, community standard, safety, and capacity of the event.</p></div></div>
           <div class="faq-item"><button aria-expanded="false"><span>Does applying guarantee a ticket?</span><span class="plus">+</span></button><div class="faq-answer"><p>No. Applications are reviewed individually. Approved guests receive private purchase access, subject to ticket availability and the applicable event terms.</p></div></div>
@@ -173,13 +155,6 @@
     </section>
   </main>
 
-  <footer class="footer">
-    <div class="footer-grid">
-      <div><img class="footer-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival" width="1536" height="768"><p>Presented by Wild Ones LLC · Hawai‘i</p></div>
-      <div><h4>Enter</h4><a href="#apply">Request invite</a><a href="/invite">Redeem invite</a><a href="https://instagram.com/nocturnehawaii" rel="noopener noreferrer">@nocturnehawaii</a></div>
-      <div><h4>Standards</h4><a href="/conduct">Code of Conduct</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div>
-    </div>
-    <div class="footer-bottom"><span>© 2026 Wild Ones LLC. NOCTURNE Festival.</span><span>Something extraordinary is coming.</span></div>
-  </footer>
+  <footer class="footer"><div class="footer-grid"><div><img class="footer-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival" width="1536" height="768" loading="lazy"><p>Presented by Wild Ones LLC · Hawai‘i</p></div><div><h4>Enter</h4><a href="#apply">Request invite</a><a href="/invite">Redeem invite</a><a href="https://instagram.com/nocturnehawaii" target="_blank" rel="noopener noreferrer">@nocturnehawaii</a></div><div><h4>Standards</h4><a href="/conduct">Code of Conduct</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div></div><div class="footer-bottom"><span>© 2026 Wild Ones LLC. NOCTURNE Festival.</span><span>Something extraordinary is coming.</span></div></footer>
 </body>
 </html>
