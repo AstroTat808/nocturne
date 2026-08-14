@@ -1,0 +1,6 @@
+node_modules/
+.netlify/
+.env
+.env.*
+nocturne-invites-*.csv
+.DS_Store

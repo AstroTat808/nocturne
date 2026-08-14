@@ -1,0 +1,15 @@
+{
+  "name": "nocturne-festival",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NOCTURNE Festival \u2014 invitation-only event site for Netlify + GitHub.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node --check netlify/functions/redeem-invite.mjs && node --check netlify/functions/create-invites.mjs && node --check site/assets/js/app.js && node --check site/assets/js/invite.js",
+    "invite:create": "node scripts/create-invites.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.7.10"
+  }
+}
