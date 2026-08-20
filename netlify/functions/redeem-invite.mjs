@@ -1,11 +1,10 @@
 import { getStore } from '@netlify/blobs';
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { accessSecret, accessTtlSeconds, makeAccessCookie, makeAccessToken } from './_ticket-auth.mjs';
 
 const STORE_NAME = 'nocturne-invites';
 const REVIEW_STORE = 'nocturne-application-reviews';
 const APPLICATION_STORE = 'nocturne-applications';
-const ACCESS_COOKIE = 'nocturne_ticket_access';
-const ACCESS_TTL_SECONDS = 30 * 60;
 
 function json(data, status = 200, extraHeaders = {}) {
   return Response.json(data, {
@@ -26,30 +25,13 @@ function hashCode(code) {
   return createHash('sha256').update(normalizeCode(code)).digest('hex');
 }
 
-function accessSecret() {
-  return process.env.NOCTURNE_TICKET_ACCESS_SECRET || process.env.NOCTURNE_ADMIN_SESSION_SECRET || process.env.NOCTURNE_ADMIN_KEY || '';
-}
-
-function sign(payload) {
-  return createHmac('sha256', accessSecret()).update(payload).digest('base64url');
-}
-
-function makeAccessCookie(sourceSubmissionId = '') {
-  if (!accessSecret()) return null;
-  const now = Math.floor(Date.now() / 1000);
-  const payload = Buffer.from(JSON.stringify({
-    scope: 'ticket-access',
-    submissionId: sourceSubmissionId,
-    iat: now,
-    exp: now + ACCESS_TTL_SECONDS,
-    nonce: randomBytes(10).toString('base64url')
-  })).toString('base64url');
-  const token = `${payload}.${sign(payload)}`;
-  return `${ACCESS_COOKIE}=${encodeURIComponent(token)}; Path=/ticket-access; HttpOnly; Secure; SameSite=Strict; Max-Age=${ACCESS_TTL_SECONDS}`;
-}
-
 function emailConfigured() {
   return Boolean(process.env.RESEND_API_KEY && process.env.NOCTURNE_EMAIL_FROM);
+}
+
+function builtInCheckoutConfigured() {
+  const price = Number(process.env.NOCTURNE_TICKET_PRICE_CENTS || 0);
+  return Boolean(process.env.STRIPE_SECRET_KEY && Number.isInteger(price) && price >= 50);
 }
 
 function escapeHtml(value = '') {
@@ -112,7 +94,7 @@ async function updateReview(submissionId, patch) {
   return next;
 }
 
-async function sendRedemptionConfirmation(req, invite, usedAt, usingTemporaryAccess) {
+async function sendRedemptionConfirmation(req, invite, usedAt, ticketUrl) {
   const submissionId = String(invite.sourceSubmissionId || '').trim();
   if (!submissionId) return { sent: false, reason: 'No source application is associated with this invitation.' };
 
@@ -155,9 +137,13 @@ async function sendRedemptionConfirmation(req, invite, usedAt, usingTemporaryAcc
     const displayName = application.preferredName || application.fullName || 'Guest';
     const safeName = escapeHtml(displayName);
     const siteUrl = (process.env.NOCTURNE_SITE_URL || new URL(req.url).origin).replace(/\/$/, '');
-    const statusCopy = usingTemporaryAccess
-      ? 'Private ticket checkout is not live yet, so there is nothing else you need to do right now. Approved guests will receive the next instructions when checkout opens.'
-      : 'Your invitation has been successfully redeemed and your private access is confirmed.';
+    const internalCheckout = ticketUrl === '/ticket-access' && builtInCheckoutConfigured();
+    const externalCheckout = /^https:\/\//i.test(ticketUrl);
+    const statusCopy = internalCheckout
+      ? 'Your private NOCTURNE ticket checkout is now available. Return to the private access page in the browser where you redeemed your invitation to purchase your ticket.'
+      : externalCheckout
+        ? 'Your invitation has been successfully redeemed and your private ticket access is ready.'
+        : 'Private ticket checkout is not live yet, so there is nothing else you need to do right now. Approved guests will receive the next instructions when checkout opens.';
 
     const text = [
       `${displayName},`,
@@ -274,15 +260,15 @@ export default async (req) => {
   }
 
   const configuredTicketUrl = invite.purchaseUrl || process.env.NOCTURNE_TICKET_URL || '';
-  const usingTemporaryAccess = !configuredTicketUrl;
+  const usingBuiltInAccess = !configuredTicketUrl;
   const ticketUrl = configuredTicketUrl || '/ticket-access';
 
-  if (!usingTemporaryAccess && !/^https:\/\//i.test(ticketUrl)) {
+  if (!usingBuiltInAccess && !/^https:\/\//i.test(ticketUrl)) {
     return failure(req, 'Ticket access URL is not valid.', 503);
   }
 
-  if (usingTemporaryAccess && !accessSecret()) {
-    return failure(req, 'Temporary ticket access is not configured.', 503);
+  if (usingBuiltInAccess && !accessSecret()) {
+    return failure(req, 'Private ticket access is not configured.', 503);
   }
 
   const usedAt = new Date().toISOString();
@@ -308,12 +294,13 @@ export default async (req) => {
     }
   }
 
-  const confirmation = await sendRedemptionConfirmation(req, invite, usedAt, usingTemporaryAccess);
+  const confirmation = await sendRedemptionConfirmation(req, invite, usedAt, ticketUrl);
 
   const headers = {};
-  if (usingTemporaryAccess) {
-    const cookie = makeAccessCookie(invite.sourceSubmissionId || '');
-    if (cookie) headers['Set-Cookie'] = cookie;
+  if (usingBuiltInAccess) {
+    const ttlSeconds = accessTtlSeconds();
+    const token = makeAccessToken(invite.sourceSubmissionId || '', ttlSeconds);
+    if (token) headers['Set-Cookie'] = makeAccessCookie(token, ttlSeconds);
   }
 
   if (isBrowserFormPost(req)) {
@@ -324,7 +311,8 @@ export default async (req) => {
     ok: true,
     message: 'Invitation accepted.',
     ticketUrl,
-    temporaryAccess: usingTemporaryAccess,
+    temporaryAccess: usingBuiltInAccess && !builtInCheckoutConfigured(),
+    builtInCheckout: usingBuiltInAccess && builtInCheckoutConfigured(),
     confirmationEmailSent: confirmation.sent
   }, 200, headers);
 };
