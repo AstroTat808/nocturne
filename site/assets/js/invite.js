@@ -31,14 +31,16 @@ form?.addEventListener('submit', async (event) => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Invitation could not be verified.');
 
-    result.textContent = data.temporaryAccess
-      ? 'Invitation accepted. Opening your private access…'
-      : 'You’re in. Your private ticket access is ready.';
+    result.textContent = data.builtInCheckout
+      ? 'Invitation accepted. Opening your private ticket checkout…'
+      : data.temporaryAccess
+        ? 'Invitation accepted. Opening your private access…'
+        : 'You’re in. Your private ticket access is ready.';
 
     link.href = data.ticketUrl;
     link.classList.add('visible');
 
-    if (data.temporaryAccess) {
+    if (data.temporaryAccess || data.builtInCheckout) {
       window.setTimeout(() => window.location.assign(data.ticketUrl), 650);
     }
   } catch (error) {
