@@ -26,6 +26,7 @@ const required = [
   'site/assets/js/invite.js',
   'site/assets/js/admin.js',
   'site/assets/js/check-in.js',
+  'site/assets/js/ticket-view.js',
   'site/assets/images/favicon.png',
   'site/assets/images/nocturne-logo.webp',
   'site/assets/images/hero-woman.webp',
