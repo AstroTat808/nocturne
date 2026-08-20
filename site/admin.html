@@ -19,7 +19,7 @@
       <span><strong>NOCTURNE</strong><small>Wild Ones review desk</small></span>
     </a>
     <div class="admin-top-actions">
-      <a href="/check-in" target="_blank" rel="noopener noreferrer">Event check-in ↗</a>
+      <a class="admin-checkin-link" href="/check-in">Event check-in ↗</a>
       <a href="/" target="_blank" rel="noopener noreferrer">View site ↗</a>
       <button id="admin-logout" class="admin-text-button" type="button" hidden>Sign out</button>
     </div>
@@ -47,6 +47,12 @@
         </div>
         <button id="admin-refresh" class="admin-outline-button" type="button">Refresh applications</button>
       </div>
+
+      <nav class="admin-operations-nav" aria-label="NOCTURNE operations">
+        <a class="admin-operation-card primary" href="/check-in"><strong>Event Check-In</strong><span>Open mobile QR scanner →</span></a>
+        <a class="admin-operation-card" href="/invite" target="_blank" rel="noopener noreferrer"><strong>Invite Redemption</strong><span>Open guest redemption page ↗</span></a>
+        <a class="admin-operation-card" href="/" target="_blank" rel="noopener noreferrer"><strong>Public Site</strong><span>View NOCTURNE homepage ↗</span></a>
+      </nav>
 
       <div class="admin-stats" aria-label="Application summary">
         <article><span id="stat-total">0</span><small>Total</small></article>
