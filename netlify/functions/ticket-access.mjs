@@ -53,20 +53,20 @@ const page = `<!doctype html>
   <title>Private Ticket Access | NOCTURNE</title>
   <link rel="icon" href="/assets/images/favicon.png">
   <link rel="stylesheet" href="/assets/css/styles.css">
-  <style>
-    body{min-height:100svh;background:radial-gradient(circle at 50% 8%,rgba(216,154,43,.13),transparent 28rem),#020202}.ticket-pending-shell{min-height:100svh;display:grid;place-items:center;padding:2rem 1rem}.ticket-pending-card{width:min(760px,100%);padding:clamp(2rem,6vw,4.5rem);border:1px solid rgba(216,154,43,.22);background:linear-gradient(145deg,rgba(12,9,6,.92),rgba(3,3,3,.94));text-align:center;box-shadow:0 40px 120px rgba(0,0,0,.45)}.ticket-pending-logo{width:min(620px,100%);height:auto;aspect-ratio:2/1;object-fit:contain;margin:0 auto 1.5rem;mix-blend-mode:screen;filter:drop-shadow(0 0 28px rgba(216,154,43,.12))}.ticket-pending-card h1{font-family:var(--serif);font-weight:500;font-size:clamp(3rem,8vw,5.6rem);line-height:.94;margin:.35rem 0;color:#fff4df}.ticket-pending-card p{max-width:600px;margin:1rem auto;color:#aa9d89}.ticket-pending-status{margin:2rem auto;padding:1.2rem;border:1px solid rgba(255,202,97,.19);background:rgba(216,154,43,.04);color:#d7c4a3}.ticket-pending-actions{display:flex;justify-content:center;gap:.8rem;flex-wrap:wrap;margin-top:1.8rem}
-  </style>
+  <link rel="stylesheet" href="/assets/css/private-access.css">
 </head>
-<body>
-  <main class="ticket-pending-shell">
-    <section class="ticket-pending-card">
-      <img class="ticket-pending-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768">
+<body class="private-access-page">
+  <main class="private-access-shell">
+    <section class="private-access-card" aria-labelledby="ticket-access-title">
+      <div class="private-access-logo-wrap">
+        <img class="private-access-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768">
+      </div>
       <p class="section-kicker">Invitation Verified</p>
-      <h1>Your access<br>is confirmed.</h1>
+      <h1 id="ticket-access-title">Your access<br>is confirmed.</h1>
       <p>Your invitation was successfully redeemed. The private ticket checkout is not live yet, so there is nothing else you need to do right now.</p>
-      <div class="ticket-pending-status"><strong>Private ticket access is being prepared.</strong><br>Approved guests will receive the next instructions when checkout opens.</div>
+      <div class="private-access-status"><strong>Private ticket access is being prepared.</strong><br>Approved guests will receive the next instructions when checkout opens.</div>
       <p>Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.</p>
-      <div class="ticket-pending-actions"><a class="btn" href="/">Return to NOCTURNE</a><a class="btn secondary" href="https://instagram.com/nocturnehawaii" target="_blank" rel="noopener noreferrer">Follow @nocturnehawaii</a></div>
+      <div class="private-access-actions"><a class="btn" href="/">Return to NOCTURNE</a><a class="btn secondary" href="https://instagram.com/nocturnehawaii" target="_blank" rel="noopener noreferrer">Follow @nocturnehawaii</a></div>
     </section>
   </main>
 </body>
