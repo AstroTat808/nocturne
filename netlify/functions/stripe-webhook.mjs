@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { makeTicketToken } from './_ticket-token.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -10,6 +11,15 @@ function safeEqual(a = '', b = '') {
   const right = Buffer.from(String(b));
   if (left.length !== right.length) return false;
   return timingSafeEqual(left, right);
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 function parseStripeSignature(header = '') {
@@ -32,7 +42,14 @@ function verifyStripeSignature(rawBody, signatureHeader) {
   return signatures.some((signature) => safeEqual(signature, expected));
 }
 
-async function sendTicketReceipt(application, session, ticketId) {
+function ticketLink(submissionId, ticketId) {
+  const token = makeTicketToken(ticketId, submissionId);
+  if (!token) return null;
+  const site = (process.env.NOCTURNE_SITE_URL || 'https://nocturnefestival.com').replace(/\/$/, '');
+  return `${site}/ticket?token=${encodeURIComponent(token)}`;
+}
+
+async function sendTicketReceipt(application, session, ticketId, submissionId) {
   if (!process.env.RESEND_API_KEY || !process.env.NOCTURNE_EMAIL_FROM || !application?.email) {
     return { sent: false, reason: 'Email not configured.' };
   }
@@ -40,8 +57,26 @@ async function sendTicketReceipt(application, session, ticketId) {
   const amount = Number(session.amount_total || 0) / 100;
   const currency = String(session.currency || 'usd').toUpperCase();
   const displayName = application.preferredName || application.fullName || 'Guest';
-  const text = `${displayName},\n\nYour NOCTURNE ticket purchase is confirmed.\n\nTicket ID: ${ticketId}\nAmount: ${currency} ${amount.toFixed(2)}\n\nYour ticket is registered to the email used in your application. Keep this message for your records. Additional event and check-in instructions will be sent privately.\n\nNOCTURNE Festival\nPresented by Wild Ones · Hawai‘i`;
-  const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Ticket Confirmed</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:42px;line-height:1.04;color:#fff3df;margin:16px 0 22px">Your ticket<br>is confirmed.</h1><p style="color:#c8baa4;line-height:1.7">${displayName}, your NOCTURNE ticket purchase has been received.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.8"><strong>Ticket ID:</strong> ${ticketId}<br><strong>Amount:</strong> ${currency} ${amount.toFixed(2)}</div><p style="color:#9d907f;line-height:1.7">Your ticket is registered to the email used in your application. Keep this message for your records. Additional event and check-in instructions will be sent privately.</p><div style="margin-top:34px;padding-top:20px;border-top:1px solid rgba(216,154,43,.18);color:#74695b;font-size:11px;letter-spacing:1px;text-transform:uppercase">NOCTURNE Festival · Presented by Wild Ones · Hawai‘i</div></div></div></body></html>`;
+  const digitalTicketUrl = ticketLink(submissionId, ticketId);
+  const text = [
+    `${displayName},`,
+    '',
+    'Your NOCTURNE ticket purchase is confirmed.',
+    '',
+    `Ticket ID: ${ticketId}`,
+    `Amount: ${currency} ${amount.toFixed(2)}`,
+    digitalTicketUrl ? `Open your digital ticket: ${digitalTicketUrl}` : '',
+    '',
+    'Your ticket is registered to the email used in your application. Keep this message and your digital ticket private. Present the QR code at event check-in.',
+    '',
+    'NOCTURNE Festival',
+    'Presented by Wild Ones · Hawai‘i'
+  ].filter(Boolean).join('\n');
+
+  const safeName = escapeHtml(displayName);
+  const safeTicket = escapeHtml(ticketId);
+  const ticketButton = digitalTicketUrl ? `<p style="text-align:center;margin:30px 0"><a href="${escapeHtml(digitalTicketUrl)}" style="display:inline-block;padding:14px 20px;background:#d89a2b;color:#0b0803;text-decoration:none;font-size:12px;letter-spacing:2px;text-transform:uppercase">Open Digital Ticket</a></p>` : '';
+  const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Ticket Confirmed</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:42px;line-height:1.04;color:#fff3df;margin:16px 0 22px">Your ticket<br>is confirmed.</h1><p style="color:#c8baa4;line-height:1.7">${safeName}, your NOCTURNE ticket purchase has been received.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.8"><strong>Ticket ID:</strong> ${safeTicket}<br><strong>Amount:</strong> ${currency} ${amount.toFixed(2)}</div>${ticketButton}<p style="color:#9d907f;line-height:1.7">Keep your digital ticket private. Its QR code is unique and will be marked used when you are admitted.</p><div style="margin-top:34px;padding-top:20px;border-top:1px solid rgba(216,154,43,.18);color:#74695b;font-size:11px;letter-spacing:1px;text-transform:uppercase">NOCTURNE Festival · Presented by Wild Ones · Hawai‘i</div></div></div></body></html>`;
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -60,7 +95,7 @@ async function sendTicketReceipt(application, session, ticketId) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.message || `Resend returned ${response.status}.`);
-  return { sent: true, messageId: data.id || null };
+  return { sent: true, messageId: data.id || null, digitalTicketUrl };
 }
 
 async function handleCompletedSession(session) {
@@ -83,12 +118,14 @@ async function handleCompletedSession(session) {
   let emailStatus = 'not_sent';
   let emailMessageId = null;
   let emailError = null;
+  let digitalTicketUrl = ticketLink(submissionId, ticketId);
 
   try {
-    const email = await sendTicketReceipt(application, session, ticketId);
+    const email = await sendTicketReceipt(application, session, ticketId, submissionId);
     emailStatus = email.sent ? 'sent' : 'not_configured';
     emailMessageId = email.messageId || null;
     emailError = email.reason || null;
+    digitalTicketUrl = email.digitalTicketUrl || digitalTicketUrl;
   } catch (error) {
     console.error('NOCTURNE ticket confirmation email failed:', error);
     emailStatus = 'failed';
@@ -108,6 +145,7 @@ async function handleCompletedSession(session) {
     customerEmail: session.customer_details?.email || application?.email || null,
     customerName: session.customer_details?.name || application?.fullName || null,
     paidAt,
+    digitalTicketUrl,
     ticketEmailStatus: emailStatus,
     ticketEmailMessageId: emailMessageId,
     ticketEmailError: emailError,
@@ -121,6 +159,8 @@ async function handleCompletedSession(session) {
     ticketId,
     status: 'paid',
     paidAt,
+    digitalTicketUrl,
+    checkedInAt: null,
     updatedAt: paidAt
   });
 
@@ -130,6 +170,8 @@ async function handleCompletedSession(session) {
       ticketState: 'paid',
       ticketPurchasedAt: paidAt,
       ticketId,
+      digitalTicketUrl,
+      checkedInAt: null,
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: session.payment_intent || null,
       ticketEmailStatus: emailStatus,
