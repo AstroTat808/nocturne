@@ -6,6 +6,7 @@ const REVIEW_STORE = 'nocturne-application-reviews';
 const INVITE_STORE = 'nocturne-invites';
 const SESSION_COOKIE = 'nocturne_admin';
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
+const INVITE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const REVIEW_STATUSES = new Set(['pending', 'shortlist', 'approved', 'declined']);
 
 function json(data, status = 200, extraHeaders = {}) {
@@ -102,12 +103,30 @@ function makeCode() {
   return `NOC-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
 }
 
+function emailConfigured() {
+  return Boolean(process.env.RESEND_API_KEY && process.env.NOCTURNE_EMAIL_FROM);
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 async function readBody(req) {
   try {
     return await req.json();
   } catch {
     return null;
   }
+}
+
+async function getApplication(submissionId) {
+  const store = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
+  return store.get(submissionId, { type: 'json', consistency: 'strong' });
 }
 
 async function getApplications() {
@@ -144,7 +163,8 @@ async function getApplications() {
           score: null,
           notes: '',
           updatedAt: null,
-          inviteGeneratedAt: null
+          inviteGeneratedAt: null,
+          inviteState: null
         }
       };
     })
@@ -193,26 +213,29 @@ async function saveReview(body) {
   return json({ ok: true, review });
 }
 
-async function generateInvite(body) {
-  const submissionId = String(body.submissionId || '').trim();
+async function createInvite(submissionId, label, { replace = false } = {}) {
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(submissionId)) {
-    return json({ error: 'Invalid submission ID.' }, 400);
+    return { error: 'Invalid submission ID.', status: 400 };
   }
 
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
-  const review = await reviewStore.get(submissionId, { type: 'json', consistency: 'strong' });
-  if (!review || review.status !== 'approved') {
-    return json({ error: 'Application must be approved before creating an invite.' }, 409);
-  }
-  if (review.inviteGeneratedAt) {
-    return json({ error: 'An invitation has already been generated for this application.' }, 409);
-  }
-
-  const label = String(body.label || 'Approved NOCTURNE guest').slice(0, 120);
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const purchaseUrl = process.env.NOCTURNE_TICKET_URL || null;
   const inviteStore = getStore({ name: INVITE_STORE, consistency: 'strong' });
+  const review = await reviewStore.get(submissionId, { type: 'json', consistency: 'strong' });
 
+  if (!review || review.status !== 'approved') {
+    return { error: 'Application must be approved before creating an invite.', status: 409 };
+  }
+
+  if (review.inviteHash && review.inviteState === 'active' && !replace) {
+    return { error: 'An active invitation already exists for this application.', status: 409 };
+  }
+
+  if (replace && review.inviteHash) {
+    await inviteStore.delete(review.inviteHash);
+  }
+
+  const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+  const purchaseUrl = process.env.NOCTURNE_TICKET_URL || null;
   let code;
   let hash;
   let saved = false;
@@ -223,7 +246,7 @@ async function generateInvite(body) {
     const result = await inviteStore.setJSON(
       hash,
       {
-        label,
+        label: String(label || 'Approved NOCTURNE guest').slice(0, 120),
         sourceSubmissionId: submissionId,
         createdAt: new Date().toISOString(),
         expiresAt: expiresAt.toISOString(),
@@ -236,23 +259,160 @@ async function generateInvite(body) {
     saved = result.modified;
   }
 
-  if (!saved) return json({ error: 'Could not create a unique invite code.' }, 500);
+  if (!saved) return { error: 'Could not create a unique invite code.', status: 500 };
 
+  const now = new Date().toISOString();
   const updatedReview = {
     ...review,
-    inviteGeneratedAt: new Date().toISOString(),
+    inviteGeneratedAt: now,
     inviteExpiresAt: expiresAt.toISOString(),
-    updatedAt: new Date().toISOString()
+    inviteHash: hash,
+    inviteState: 'active',
+    inviteRevokedAt: null,
+    inviteRedeemedAt: null,
+    inviteEmailSentAt: null,
+    inviteEmailMessageId: null,
+    updatedAt: now
+  };
+  await reviewStore.setJSON(submissionId, updatedReview);
+
+  return { code, expiresAt: expiresAt.toISOString(), review: updatedReview };
+}
+
+async function generateInvite(body) {
+  const submissionId = String(body.submissionId || '').trim();
+  const result = await createInvite(submissionId, body.label, { replace: false });
+  if (result.error) return json({ error: result.error }, result.status);
+
+  return json({
+    ok: true,
+    ...result,
+    note: 'Copy this code now. The raw code is not stored in the review record.'
+  }, 201);
+}
+
+async function revokeInvite(body) {
+  const submissionId = String(body.submissionId || '').trim();
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(submissionId)) {
+    return json({ error: 'Invalid submission ID.' }, 400);
+  }
+
+  const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
+  const inviteStore = getStore({ name: INVITE_STORE, consistency: 'strong' });
+  const review = await reviewStore.get(submissionId, { type: 'json', consistency: 'strong' });
+
+  if (!review?.inviteHash) return json({ error: 'No revocable invitation is recorded for this applicant.' }, 409);
+  if (review.inviteState === 'revoked') return json({ error: 'This invitation is already revoked.' }, 409);
+
+  await inviteStore.delete(review.inviteHash);
+  const now = new Date().toISOString();
+  const updatedReview = {
+    ...review,
+    inviteState: 'revoked',
+    inviteRevokedAt: now,
+    updatedAt: now
+  };
+  await reviewStore.setJSON(submissionId, updatedReview);
+  return json({ ok: true, review: updatedReview });
+}
+
+async function regenerateInvite(body) {
+  const submissionId = String(body.submissionId || '').trim();
+  const result = await createInvite(submissionId, body.label, { replace: true });
+  if (result.error) return json({ error: result.error }, result.status);
+
+  return json({
+    ok: true,
+    ...result,
+    note: 'The previous invitation was invalidated. Copy the replacement code now.'
+  }, 201);
+}
+
+async function sendApprovalEmail(req, body) {
+  if (!emailConfigured()) {
+    return json({
+      error: 'Direct email is not configured. Add RESEND_API_KEY and NOCTURNE_EMAIL_FROM in Netlify.'
+    }, 503);
+  }
+
+  const submissionId = String(body.submissionId || '').trim();
+  const code = normalizeCode(body.code || '');
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(submissionId)) return json({ error: 'Invalid submission ID.' }, 400);
+  if (!/^NOC-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ error: 'Invalid invitation code.' }, 400);
+
+  const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
+  const review = await reviewStore.get(submissionId, { type: 'json', consistency: 'strong' });
+  if (!review || review.status !== 'approved' || review.inviteState !== 'active' || !review.inviteHash) {
+    return json({ error: 'The applicant must have an active approved invitation before email can be sent.' }, 409);
+  }
+  if (!constantTimeEqual(hashCode(code), review.inviteHash)) {
+    return json({ error: 'The supplied invitation code does not match the active invite.' }, 409);
+  }
+
+  const application = await getApplication(submissionId);
+  if (!application?.email) return json({ error: 'This application does not have an email address.' }, 409);
+
+  const siteUrl = (process.env.NOCTURNE_SITE_URL || new URL(req.url).origin).replace(/\/$/, '');
+  const redeemUrl = `${siteUrl}/invite`;
+  const subject = String(body.subject || 'Your NOCTURNE invitation').trim().slice(0, 160);
+  const personalNote = String(body.note || '').trim().slice(0, 1400);
+  const displayName = application.preferredName || application.fullName || 'Guest';
+  const safeName = escapeHtml(displayName);
+  const safeCode = escapeHtml(code);
+  const safeNote = escapeHtml(personalNote).replaceAll('\n', '<br>');
+
+  const text = [
+    `${displayName},`,
+    '',
+    'Your request to enter NOCTURNE has been approved.',
+    personalNote ? `\n${personalNote}\n` : '',
+    `Invitation code: ${code}`,
+    `Redeem your invitation: ${redeemUrl}`,
+    '',
+    'This invitation is intended for you and may be redeemed once.',
+    '',
+    'NOCTURNE Festival',
+    'Presented by Wild Ones · Hawai‘i'
+  ].filter(Boolean).join('\n');
+
+  const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Private Invitation</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:40px;line-height:1.05;color:#fff3df;margin:16px 0 22px">The night has opened<br>for you.</h1><p style="color:#c8baa4;line-height:1.7">${safeName}, your request to enter NOCTURNE has been approved.</p>${safeNote ? `<p style="color:#c8baa4;line-height:1.7">${safeNote}</p>` : ''}<div style="margin:28px 0;padding:18px;text-align:center;border:1px solid rgba(255,202,97,.3);background:#020202;color:#ffca61;font-size:20px;letter-spacing:3px">${safeCode}</div><p style="text-align:center;margin:28px 0"><a href="${escapeHtml(redeemUrl)}" style="display:inline-block;padding:14px 20px;background:#d89a2b;color:#0b0803;text-decoration:none;font-size:12px;letter-spacing:2px;text-transform:uppercase">Redeem Invitation</a></p><p style="color:#8f8372;font-size:12px;line-height:1.7">This invitation is intended for you and may be redeemed once. Keep the code private.</p><div style="margin-top:34px;padding-top:20px;border-top:1px solid rgba(216,154,43,.18);color:#74695b;font-size:11px;letter-spacing:1px;text-transform:uppercase">NOCTURNE Festival · Presented by Wild Ones · Hawai‘i</div></div></div></body></html>`;
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: process.env.NOCTURNE_EMAIL_FROM,
+      to: [application.email],
+      subject,
+      html,
+      text
+    })
+  });
+
+  const responseData = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error('NOCTURNE approval email failed:', response.status, responseData);
+    return json({ error: responseData.message || 'Approval email could not be sent.' }, 502);
+  }
+
+  const now = new Date().toISOString();
+  const updatedReview = {
+    ...review,
+    inviteEmailSentAt: now,
+    inviteEmailMessageId: responseData.id || null,
+    updatedAt: now
   };
   await reviewStore.setJSON(submissionId, updatedReview);
 
   return json({
     ok: true,
-    code,
-    expiresAt: expiresAt.toISOString(),
-    review: updatedReview,
-    note: 'Copy this code now. The raw code is not stored in the review record.'
-  }, 201);
+    recipient: application.email,
+    messageId: responseData.id || null,
+    review: updatedReview
+  });
 }
 
 export default async (req) => {
@@ -286,22 +446,29 @@ export default async (req) => {
     if (!hasValidSession(req)) return json({ error: 'Unauthorized.' }, 401);
     if (bodyAction === 'review') return saveReview(body);
     if (bodyAction === 'generate-invite') return generateInvite(body);
+    if (bodyAction === 'revoke-invite') return revokeInvite(body);
+    if (bodyAction === 'regenerate-invite') return regenerateInvite(body);
+    if (bodyAction === 'send-approval-email') return sendApprovalEmail(req, body);
     return json({ error: 'Unknown action.' }, 400);
   }
 
   if (req.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
   if (!hasValidSession(req)) return json({ authenticated: false }, 401);
-  if (action === 'session') return json({ authenticated: true });
+  if (action === 'session') return json({ authenticated: true, emailConfigured: emailConfigured() });
 
   if (action === 'applications') {
     try {
       const result = await getApplications();
-      return json({ ...result, stats: summarize(result.applications) });
+      return json({
+        ...result,
+        stats: summarize(result.applications),
+        capabilities: { emailConfigured: emailConfigured() }
+      });
     } catch (error) {
       console.error('NOCTURNE admin application load failed:', error);
       return json({ error: error.message || 'Could not load applications.' }, 502);
     }
   }
 
-  return json({ authenticated: true });
+  return json({ authenticated: true, emailConfigured: emailConfigured() });
 };
