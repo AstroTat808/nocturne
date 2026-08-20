@@ -31,6 +31,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/check-in"
+  to = "/.netlify/functions/check-in"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/create-invites"
   to = "/.netlify/functions/create-invites"
   status = 200
@@ -59,6 +65,23 @@
   to = "/.netlify/functions/ticket-confirmed"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/ticket/qr"
+  to = "/.netlify/functions/ticket-qr"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket"
+  to = "/.netlify/functions/ticket-view"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/check-in"
+  to = "/check-in.html"
+  status = 200
 
 [[redirects]]
   from = "/apply"
@@ -122,6 +145,19 @@
   [headers.values]
     Cache-Control = "no-store"
     X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/ticket*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/check-in*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    Permissions-Policy = "camera=(self), microphone=(), geolocation=(), payment=()"
 
 [[headers]]
   for = "/admin*"
