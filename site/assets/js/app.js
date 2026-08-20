@@ -12,6 +12,16 @@ if (!document.querySelector('link[data-nocturne-premium]')) {
   document.head.appendChild(premiumStyles);
 }
 
+// Blend the existing moon artwork into dark surfaces site-wide so the baked-in
+// square background does not read as a visible card in the header or footer.
+if (!document.querySelector('link[data-nocturne-icons]')) {
+  const iconStyles = document.createElement('link');
+  iconStyles.rel = 'stylesheet';
+  iconStyles.href = '/assets/css/icons.css';
+  iconStyles.dataset.nocturneIcons = 'true';
+  document.head.appendChild(iconStyles);
+}
+
 // Preserve the supplied 1536x768 NOCTURNE logo at its native 2:1 aspect ratio.
 const heroLogo = document.querySelector('.hero-logo');
 if (heroLogo) {
