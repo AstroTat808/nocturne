@@ -1,4 +1,10 @@
-import { access } from 'node:fs/promises';
+import { access, copyFile, mkdir } from 'node:fs/promises';
+
+await mkdir('site/assets/vendor', { recursive: true });
+await copyFile(
+  'node_modules/html5-qrcode/html5-qrcode.min.js',
+  'site/assets/vendor/html5-qrcode.min.js'
+);
 
 const required = [
   'site/index.html',
@@ -27,6 +33,7 @@ const required = [
   'site/assets/js/admin.js',
   'site/assets/js/check-in.js',
   'site/assets/js/ticket-view.js',
+  'site/assets/vendor/html5-qrcode.min.js',
   'site/assets/images/favicon.png',
   'site/assets/images/nocturne-logo.webp',
   'site/assets/images/hero-woman.webp',
