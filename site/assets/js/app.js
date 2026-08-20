@@ -2,8 +2,17 @@ const header = document.querySelector('.site-header');
 const menuToggle = document.querySelector('.menu-toggle');
 const nav = document.querySelector('.nav');
 
+// Load the premium presentation layer after the base stylesheet so it can
+// enhance shared navigation and the homepage hero without changing legal pages.
+if (!document.querySelector('link[data-nocturne-premium]')) {
+  const premiumStyles = document.createElement('link');
+  premiumStyles.rel = 'stylesheet';
+  premiumStyles.href = '/assets/css/premium.css';
+  premiumStyles.dataset.nocturnePremium = 'true';
+  document.head.appendChild(premiumStyles);
+}
+
 // Preserve the supplied 1536x768 NOCTURNE logo at its native 2:1 aspect ratio.
-// This intentionally overrides any inherited sizing that could distort it.
 const heroLogo = document.querySelector('.hero-logo');
 if (heroLogo) {
   heroLogo.setAttribute('width', '1536');
@@ -15,7 +24,6 @@ if (heroLogo) {
     objectFit: 'contain',
     maxWidth: '100%',
     marginLeft: '0',
-    transform: 'none',
     flexShrink: '0'
   });
 }
@@ -67,8 +75,53 @@ if (form) {
   });
 }
 
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const hero = document.querySelector('.hero');
+if (hero) {
+  requestAnimationFrame(() => hero.classList.add('cinematic-ready'));
+
+  if (!reduceMotion && window.matchMedia('(pointer:fine)').matches) {
+    let raf = 0;
+    let nextX = 72;
+    let nextY = 30;
+    let nextPX = 0;
+    let nextPY = 0;
+
+    const renderHeroPointer = () => {
+      raf = 0;
+      hero.style.setProperty('--hero-light-x', `${nextX}%`);
+      hero.style.setProperty('--hero-light-y', `${nextY}%`);
+      hero.style.setProperty('--hero-parallax-x', `${nextPX}px`);
+      hero.style.setProperty('--hero-parallax-y', `${nextPY}px`);
+    };
+
+    const queueHeroPointer = () => {
+      if (!raf) raf = requestAnimationFrame(renderHeroPointer);
+    };
+
+    hero.addEventListener('pointermove', (event) => {
+      const rect = hero.getBoundingClientRect();
+      const x = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
+      const y = Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1);
+      nextX = 58 + x * 26;
+      nextY = 18 + y * 30;
+      nextPX = (x - .5) * -10;
+      nextPY = (y - .5) * -7;
+      queueHeroPointer();
+    }, { passive: true });
+
+    hero.addEventListener('pointerleave', () => {
+      nextX = 72;
+      nextY = 30;
+      nextPX = 0;
+      nextPY = 0;
+      queueHeroPointer();
+    });
+  }
+}
+
 const canvas = document.querySelector('#stars');
-if (canvas && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+if (canvas && !reduceMotion) {
   const ctx = canvas.getContext('2d');
   let w, h, dpr, particles;
   const resize = () => {
@@ -76,22 +129,25 @@ if (canvas && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     w = canvas.clientWidth; h = canvas.clientHeight;
     canvas.width = w * dpr; canvas.height = h * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    particles = Array.from({ length: Math.min(110, Math.floor(w / 10)) }, () => ({
+    particles = Array.from({ length: Math.min(130, Math.floor(w / 9)) }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      r: Math.random() * 1.15 + .2,
-      a: Math.random() * .5 + .15,
-      s: Math.random() * .08 + .02
+      r: Math.random() * 1.25 + .18,
+      a: Math.random() * .58 + .12,
+      s: Math.random() * .075 + .018,
+      t: Math.random() * Math.PI * 2
     }));
   };
   const draw = () => {
     ctx.clearRect(0, 0, w, h);
     for (const p of particles) {
       p.y -= p.s;
+      p.t += .012;
       if (p.y < -2) { p.y = h + 2; p.x = Math.random() * w; }
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,202,97,${p.a})`;
+      const twinkle = Math.max(.08, p.a + Math.sin(p.t) * .12);
+      ctx.fillStyle = `rgba(255,202,97,${twinkle})`;
       ctx.fill();
     }
     requestAnimationFrame(draw);
