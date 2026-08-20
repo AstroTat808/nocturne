@@ -1,49 +1,53 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { getStore } from '@netlify/blobs';
+import { readTicketAccess } from './_ticket-auth.mjs';
 
-const ACCESS_COOKIE = 'nocturne_ticket_access';
+const ORDER_STORE = 'nocturne-ticket-orders';
 
-function accessSecret() {
-  return process.env.NOCTURNE_TICKET_ACCESS_SECRET || process.env.NOCTURNE_ADMIN_SESSION_SECRET || process.env.NOCTURNE_ADMIN_KEY || '';
+function escapeHtml(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
-function sign(payload) {
-  return createHmac('sha256', accessSecret()).update(payload).digest('base64url');
+function checkoutConfigured() {
+  const price = Number(process.env.NOCTURNE_TICKET_PRICE_CENTS || 0);
+  return Boolean(process.env.STRIPE_SECRET_KEY && Number.isInteger(price) && price >= 50);
 }
 
-function constantTimeEqual(a = '', b = '') {
-  const left = Buffer.from(String(a));
-  const right = Buffer.from(String(b));
-  if (left.length !== right.length) return false;
-  return timingSafeEqual(left, right);
+function formattedPrice() {
+  const amount = Number(process.env.NOCTURNE_TICKET_PRICE_CENTS || 0) / 100;
+  const currency = String(process.env.NOCTURNE_TICKET_CURRENCY || 'usd').toUpperCase();
+  return `${currency} ${amount.toFixed(2)}`;
 }
 
-function parseCookies(req) {
-  const header = req.headers.get('cookie') || '';
-  return Object.fromEntries(
-    header.split(';').map((part) => {
-      const index = part.indexOf('=');
-      if (index < 0) return ['', ''];
-      return [part.slice(0, index).trim(), decodeURIComponent(part.slice(index + 1).trim())];
-    }).filter(([key]) => key)
-  );
-}
+function renderPage({ paid = false, ticketId = '', checkoutMessage = '' } = {}) {
+  const configured = checkoutConfigured();
+  const ticketName = escapeHtml(process.env.NOCTURNE_TICKET_NAME || 'NOCTURNE Festival — General Admission');
 
-function validAccess(req) {
-  if (!accessSecret()) return false;
-  const token = parseCookies(req)[ACCESS_COOKIE];
-  if (!token || !token.includes('.')) return false;
-  const [payload, signature] = token.split('.', 2);
-  if (!constantTimeEqual(signature, sign(payload))) return false;
+  let status;
+  let actions;
+  let lead;
 
-  try {
-    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return data.scope === 'ticket-access' && Number(data.exp) > Math.floor(Date.now() / 1000);
-  } catch {
-    return false;
+  if (paid) {
+    lead = 'Your invitation has been redeemed and your NOCTURNE ticket purchase is confirmed.';
+    status = `<div class="private-access-status"><strong>Ticket confirmed.</strong><br>Ticket ID: ${escapeHtml(ticketId || 'Registered')}</div>`;
+    actions = '<div class="private-access-actions"><a class="btn" href="/">Return to NOCTURNE</a><a class="btn secondary" href="https://instagram.com/nocturnehawaii" target="_blank" rel="noopener noreferrer">Follow @nocturnehawaii</a></div>';
+  } else if (configured) {
+    lead = 'Your invitation has been successfully redeemed. Your private ticket checkout is now available.';
+    status = `<div class="private-access-status"><strong>${ticketName}</strong><br>${formattedPrice()} · One ticket per approved invitation</div>`;
+    actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-actions"><button class="btn" type="submit">Purchase Private Ticket →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></form>`;
+  } else {
+    lead = 'Your invitation was successfully redeemed. The private ticket checkout is not live yet, so there is nothing else you need to do right now.';
+    status = '<div class="private-access-status"><strong>Private ticket access is being prepared.</strong><br>Approved guests will receive the next instructions when checkout opens.</div>';
+    actions = '<div class="private-access-actions"><a class="btn" href="/">Return to NOCTURNE</a><a class="btn secondary" href="https://instagram.com/nocturnehawaii" target="_blank" rel="noopener noreferrer">Follow @nocturnehawaii</a></div>';
   }
-}
 
-const page = `<!doctype html>
+  const message = checkoutMessage ? `<div class="private-access-status"><strong>${escapeHtml(checkoutMessage)}</strong></div>` : '';
+
+  return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -63,19 +67,22 @@ const page = `<!doctype html>
       </div>
       <p class="section-kicker">Invitation Verified</p>
       <h1 id="ticket-access-title">Your access<br>is confirmed.</h1>
-      <p>Your invitation was successfully redeemed. The private ticket checkout is not live yet, so there is nothing else you need to do right now.</p>
-      <div class="private-access-status"><strong>Private ticket access is being prepared.</strong><br>Approved guests will receive the next instructions when checkout opens.</div>
-      <p>Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.</p>
-      <div class="private-access-actions"><a class="btn" href="/">Return to NOCTURNE</a><a class="btn secondary" href="https://instagram.com/nocturnehawaii" target="_blank" rel="noopener noreferrer">Follow @nocturnehawaii</a></div>
+      <p>${escapeHtml(lead)}</p>
+      ${message}
+      ${status}
+      <p>${paid ? 'Your purchase is recorded in the NOCTURNE guest system. Keep your confirmation email for your records.' : configured ? 'Checkout is processed securely by Stripe. Your approved invitation permits one ticket purchase.' : 'Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.'}</p>
+      ${actions}
     </section>
   </main>
 </body>
 </html>`;
+}
 
 export default async (req) => {
   if (req.method !== 'GET') return new Response('Method not allowed.', { status: 405 });
 
-  if (!validAccess(req)) {
+  const access = readTicketAccess(req);
+  if (!access) {
     return new Response(`<!doctype html><html><head><meta name="robots" content="noindex"><meta http-equiv="refresh" content="2;url=/invite"><title>Private Access | NOCTURNE</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#030303;color:#d6c4a7;font:16px Arial,sans-serif;text-align:center}</style></head><body><p>Private access requires a valid redeemed invitation.<br>Returning to invitation verification…</p></body></html>`, {
       status: 401,
       headers: {
@@ -86,7 +93,18 @@ export default async (req) => {
     });
   }
 
-  return new Response(page, {
+  const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
+  const order = await orderStore.get(`submission-${access.submissionId}`, { type: 'json', consistency: 'strong' });
+  const url = new URL(req.url);
+  let checkoutMessage = '';
+  if (url.searchParams.get('checkout') === 'cancelled') checkoutMessage = 'Checkout was cancelled. No charge was completed.';
+  if (url.searchParams.get('checkout_error')) checkoutMessage = url.searchParams.get('checkout_error').slice(0, 240);
+
+  return new Response(renderPage({
+    paid: order?.status === 'paid',
+    ticketId: order?.ticketId || '',
+    checkoutMessage
+  }), {
     status: 200,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
