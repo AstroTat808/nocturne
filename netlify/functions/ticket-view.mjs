@@ -14,18 +14,8 @@ function escapeHtml(value = '') {
     .replaceAll("'", '&#039;');
 }
 
-function ticketUrl(req, token) {
-  const base = (process.env.NOCTURNE_SITE_URL || new URL(req.url).origin).replace(/\/$/, '');
-  return `${base}/ticket?token=${encodeURIComponent(token)}`;
-}
-
-function qrUrl(value) {
-  return `https://quickchart.io/qr?size=520&margin=2&text=${encodeURIComponent(value)}`;
-}
-
-function page({ valid = false, checkedIn = false, ticketId = '', guestName = '', ticketName = '', token = '', req, message = '' }) {
-  const fullTicketUrl = valid ? ticketUrl(req, token) : '';
-  const qr = valid ? qrUrl(fullTicketUrl) : '';
+function page({ valid = false, checkedIn = false, ticketId = '', guestName = '', ticketName = '', token = '', message = '' }) {
+  const qr = valid ? `/ticket/qr?token=${encodeURIComponent(token)}` : '';
   const status = checkedIn
     ? '<div class="private-access-status"><strong>Already checked in.</strong><br>This ticket was previously admitted.</div>'
     : valid
@@ -48,7 +38,7 @@ export default async (req) => {
   if (req.method !== 'GET') return new Response('Method not allowed.', { status: 405 });
   const token = String(new URL(req.url).searchParams.get('token') || '').trim();
   const parsed = verifyTicketToken(token);
-  if (!parsed) return new Response(page({ req, message: 'This ticket link is invalid.' }), { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
+  if (!parsed) return new Response(page({ message: 'This ticket link is invalid.' }), { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
 
   const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
   const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
@@ -59,8 +49,8 @@ export default async (req) => {
     reviewStore.get(parsed.submissionId, { type: 'json', consistency: 'strong' })
   ]);
 
-  if (!order || order.status !== 'paid' || order.ticketId !== parsed.ticketId || review?.ticketState !== 'paid' && review?.ticketState !== 'checked_in') {
-    return new Response(page({ req, message: 'This ticket is not active.' }), { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
+  if (!order || order.status !== 'paid' || order.ticketId !== parsed.ticketId || (review?.ticketState !== 'paid' && review?.ticketState !== 'checked_in')) {
+    return new Response(page({ message: 'This ticket is not active.' }), { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
   }
 
   const checkedIn = Boolean(order.checkedInAt || review?.checkedInAt || review?.ticketState === 'checked_in');
@@ -70,7 +60,6 @@ export default async (req) => {
     ticketId: parsed.ticketId,
     guestName: application?.preferredName || application?.fullName || '',
     ticketName: process.env.NOCTURNE_TICKET_NAME || 'NOCTURNE Festival — General Admission',
-    token,
-    req
+    token
   }), { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
 };
