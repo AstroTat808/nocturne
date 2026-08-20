@@ -9,6 +9,7 @@
   <link rel="icon" type="image/png" href="/assets/images/favicon.png">
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/admin.css">
+  <link rel="stylesheet" href="/assets/css/admin-invites.css">
   <script src="/assets/js/admin.js" defer></script>
 </head>
 <body class="admin-body">
@@ -54,9 +55,23 @@
         <article><span id="stat-declined">0</span><small>Declined</small></article>
       </div>
 
+      <section class="admin-invite-lifecycle" aria-labelledby="invite-lifecycle-title">
+        <div class="admin-invite-lifecycle-head">
+          <div><p class="admin-kicker">Invitation lifecycle</p><h2 id="invite-lifecycle-title">Code status.</h2></div>
+          <p>These counts are independent from application decisions. Select a state to filter applicants by invitation status.</p>
+        </div>
+        <div class="admin-invite-stats" aria-label="Invitation status summary">
+          <button class="admin-invite-stat" type="button" data-invite-state-filter="active"><span id="invite-stat-active">0</span><small>Active</small><em>Valid and unused</em></button>
+          <button class="admin-invite-stat" type="button" data-invite-state-filter="redeemed"><span id="invite-stat-redeemed">0</span><small>Redeemed</small><em>Successfully used</em></button>
+          <button class="admin-invite-stat" type="button" data-invite-state-filter="revoked"><span id="invite-stat-revoked">0</span><small>Revoked</small><em>Manually disabled</em></button>
+          <button class="admin-invite-stat" type="button" data-invite-state-filter="expired"><span id="invite-stat-expired">0</span><small>Expired</small><em>Past expiration</em></button>
+        </div>
+      </section>
+
       <div class="admin-toolbar">
         <label class="admin-search"><span>Search</span><input id="admin-search" type="search" placeholder="Name, email, Instagram, referral…" autocomplete="off"></label>
-        <label><span>Status</span><select id="admin-status-filter"><option value="all">All applications</option><option value="pending">Pending</option><option value="shortlist">Shortlist</option><option value="approved">Approved</option><option value="declined">Declined</option></select></label>
+        <label><span>Application status</span><select id="admin-status-filter"><option value="all">All applications</option><option value="pending">Pending</option><option value="shortlist">Shortlist</option><option value="approved">Approved</option><option value="declined">Declined</option></select></label>
+        <label><span>Invite status</span><select id="admin-invite-filter"><option value="all">All invite states</option><option value="none">No invite</option><option value="active">Active</option><option value="redeemed">Redeemed</option><option value="revoked">Revoked</option><option value="expired">Expired</option></select></label>
       </div>
 
       <p id="admin-load-status" class="admin-status" role="status" aria-live="polite"></p>
