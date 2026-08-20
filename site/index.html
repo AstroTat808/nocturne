@@ -111,9 +111,8 @@
           <p><strong style="color:var(--champagne)">Already approved?</strong><br><a href="/invite" style="color:var(--gold-bright)">Redeem your invitation →</a></p>
         </div>
 
-        <form id="application-form" class="application-form reveal" name="nocturne-application" method="POST" action="/application-received.html" data-netlify="true" netlify-honeypot="bot-field">
-          <input type="hidden" name="form-name" value="nocturne-application">
-          <p class="honeypot"><label>Do not fill this out if you are human: <input name="bot-field"></label></p>
+        <form id="application-form" class="application-form reveal" name="nocturne-application" method="POST" action="/api/apply">
+          <p class="honeypot"><label>Do not fill this out if you are human: <input name="bot-field" autocomplete="off" tabindex="-1"></label></p>
           <section class="form-section">
             <h3>About you</h3>
             <div class="field-grid">
