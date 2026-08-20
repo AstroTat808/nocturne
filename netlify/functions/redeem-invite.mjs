@@ -47,36 +47,77 @@ function makeAccessCookie(sourceSubmissionId = '') {
   return `${ACCESS_COOKIE}=${encodeURIComponent(token)}; Path=/ticket-access; HttpOnly; Secure; SameSite=Strict; Max-Age=${ACCESS_TTL_SECONDS}`;
 }
 
+async function readCode(req) {
+  const contentType = (req.headers.get('content-type') || '').toLowerCase();
+
+  if (contentType.includes('application/json')) {
+    const body = await req.json();
+    return normalizeCode(body?.code || '');
+  }
+
+  if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+    const form = await req.formData();
+    return normalizeCode(form.get('code') || '');
+  }
+
+  throw new Error('Unsupported request type.');
+}
+
+function isBrowserFormPost(req) {
+  const contentType = (req.headers.get('content-type') || '').toLowerCase();
+  return !req.headers.get('x-nocturne-ajax') && (
+    contentType.includes('application/x-www-form-urlencoded') ||
+    contentType.includes('multipart/form-data')
+  );
+}
+
+function browserRedirect(location, extraHeaders = {}) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: location,
+      'Cache-Control': 'no-store',
+      ...extraHeaders
+    }
+  });
+}
+
+function failure(req, message, status) {
+  if (isBrowserFormPost(req)) {
+    return browserRedirect(`/invite?error=${encodeURIComponent(message)}`);
+  }
+  return json({ error: message }, status);
+}
+
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
 
   const origin = req.headers.get('origin');
   const requestOrigin = new URL(req.url).origin;
-  if (origin && origin !== requestOrigin) return json({ error: 'Origin not allowed.' }, 403);
+  if (origin && origin !== requestOrigin) return failure(req, 'Origin not allowed.', 403);
 
-  let body;
+  let code;
   try {
-    body = await req.json();
+    code = await readCode(req);
   } catch {
-    return json({ error: 'Invalid request.' }, 400);
+    return failure(req, 'Invalid request.', 400);
   }
 
-  const code = normalizeCode(body.code || '');
   if (!/^NOC-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) {
-    return json({ error: 'That invitation code is not valid.' }, 400);
+    return failure(req, 'That invitation code is not valid.', 400);
   }
 
   const store = getStore({ name: STORE_NAME, consistency: 'strong' });
   const key = hashCode(code);
   const entry = await store.getWithMetadata(key, { type: 'json', consistency: 'strong' });
 
-  if (!entry) return json({ error: 'Invitation not found or no longer active.' }, 404);
+  if (!entry) return failure(req, 'Invitation not found or no longer active.', 404);
 
   const invite = entry.data;
-  if (invite.used) return json({ error: 'This invitation has already been redeemed.' }, 410);
+  if (invite.used) return failure(req, 'This invitation has already been redeemed.', 410);
 
   if (invite.expiresAt && Date.now() > new Date(invite.expiresAt).getTime()) {
-    return json({ error: 'This invitation has expired.' }, 410);
+    return failure(req, 'This invitation has expired.', 410);
   }
 
   const configuredTicketUrl = invite.purchaseUrl || process.env.NOCTURNE_TICKET_URL || '';
@@ -84,20 +125,21 @@ export default async (req) => {
   const ticketUrl = configuredTicketUrl || '/ticket-access';
 
   if (!usingTemporaryAccess && !/^https:\/\//i.test(ticketUrl)) {
-    return json({ error: 'Ticket access URL is not valid.' }, 503);
+    return failure(req, 'Ticket access URL is not valid.', 503);
   }
 
   if (usingTemporaryAccess && !accessSecret()) {
-    return json({ error: 'Temporary ticket access is not configured.' }, 503);
+    return failure(req, 'Temporary ticket access is not configured.', 503);
   }
 
+  const usedAt = new Date().toISOString();
   const result = await store.setJSON(
     key,
-    { ...invite, used: true, usedAt: new Date().toISOString() },
+    { ...invite, used: true, usedAt },
     { onlyIfMatch: entry.etag }
   );
 
-  if (!result.modified) return json({ error: 'This invitation was just redeemed elsewhere.' }, 409);
+  if (!result.modified) return failure(req, 'This invitation was just redeemed elsewhere.', 409);
 
   if (invite.sourceSubmissionId) {
     try {
@@ -107,8 +149,8 @@ export default async (req) => {
         await reviewStore.setJSON(invite.sourceSubmissionId, {
           ...review,
           inviteState: 'redeemed',
-          inviteRedeemedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          inviteRedeemedAt: usedAt,
+          updatedAt: usedAt
         });
       }
     } catch (error) {
@@ -117,7 +159,14 @@ export default async (req) => {
   }
 
   const headers = {};
-  if (usingTemporaryAccess) headers['Set-Cookie'] = makeAccessCookie(invite.sourceSubmissionId || '');
+  if (usingTemporaryAccess) {
+    const cookie = makeAccessCookie(invite.sourceSubmissionId || '');
+    if (cookie) headers['Set-Cookie'] = cookie;
+  }
+
+  if (isBrowserFormPost(req)) {
+    return browserRedirect(ticketUrl, headers);
+  }
 
   return json({
     ok: true,
