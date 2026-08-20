@@ -27,7 +27,7 @@
     <section id="admin-login" class="admin-login-card" aria-labelledby="login-title">
       <p class="admin-kicker">Private operations</p>
       <h1 id="login-title">Wild Ones<br><em>review desk.</em></h1>
-      <p>Enter the private NOCTURNE admin password to review applications and issue invitation codes.</p>
+      <p>Enter the private NOCTURNE admin password to review applications and manage invitations.</p>
       <form id="admin-login-form" class="admin-login-form">
         <label for="admin-password">Admin password</label>
         <input id="admin-password" name="password" type="password" autocomplete="current-password" required autofocus>
@@ -41,7 +41,7 @@
         <div>
           <p class="admin-kicker">Invitation applications</p>
           <h1>Guest review.</h1>
-          <p class="admin-muted">Review applicant context, record internal notes, score fit, and move applicants through the invitation workflow.</p>
+          <p class="admin-muted">Review applicants, record decisions, manage invitation codes, and send approval messages.</p>
         </div>
         <button id="admin-refresh" class="admin-outline-button" type="button">Refresh applications</button>
       </div>
@@ -73,12 +73,24 @@
   </main>
 
   <div id="invite-modal" class="invite-modal" hidden role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
-    <div class="invite-modal-card">
-      <p class="admin-kicker">Invitation created</p>
-      <h2 id="invite-modal-title">Copy this code now.</h2>
-      <p>The raw code is shown once here and is not stored in the application review record.</p>
+    <div class="invite-modal-card invite-modal-wide">
+      <p class="admin-kicker">Invitation ready</p>
+      <h2 id="invite-modal-title">Copy or send this code.</h2>
+      <p>The raw code is available only in this window. Copy it now or send the approval email before closing.</p>
       <code id="generated-invite-code"></code>
-      <div class="invite-modal-actions"><button id="copy-invite-code" class="btn" type="button">Copy invite code</button><button id="close-invite-modal" class="admin-outline-button" type="button">Close</button></div>
+      <div class="invite-modal-actions">
+        <button id="copy-invite-code" class="admin-outline-button" type="button">Copy invite code</button>
+      </div>
+
+      <div class="admin-email-panel">
+        <div class="admin-email-head"><h3>Approval email</h3><span id="email-capability"></span></div>
+        <label>Recipient<input id="approval-email-recipient" type="email" readonly></label>
+        <label>Subject<input id="approval-email-subject" type="text" maxlength="160" value="Your NOCTURNE invitation"></label>
+        <label>Personal note<textarea id="approval-email-note" maxlength="1400" placeholder="Optional personal note from the Wild Ones team."></textarea></label>
+        <button id="send-approval-email" class="btn" type="button">Send Approval Email →</button>
+      </div>
+
+      <div class="invite-modal-actions"><button id="close-invite-modal" class="admin-outline-button" type="button">Close</button></div>
       <p id="invite-copy-status" class="admin-status" role="status" aria-live="polite"></p>
     </div>
   </div>
