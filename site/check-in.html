@@ -9,6 +9,7 @@
   <link rel="icon" href="/assets/images/favicon.png">
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/check-in.css">
+  <script src="/assets/vendor/html5-qrcode.min.js" defer></script>
   <script src="/assets/js/check-in.js" defer></script>
 </head>
 <body class="checkin-body">
@@ -23,25 +24,29 @@
         <button class="btn" type="submit">Open Scanner →</button>
       </form>
       <p id="checkin-login-status" class="checkin-status" role="status"></p>
+      <a class="checkin-back-link" href="/admin">← Admin dashboard</a>
     </section>
 
     <section id="checkin-console" class="checkin-panel checkin-console" hidden>
       <div class="checkin-head">
         <div><p class="section-kicker">NOCTURNE Door</p><h1>Scan ticket.</h1></div>
-        <button id="checkin-logout" class="checkin-text-button" type="button">Sign out</button>
+        <div class="checkin-head-actions"><a href="/admin">Admin</a><button id="checkin-logout" class="checkin-text-button" type="button">Sign out</button></div>
       </div>
 
-      <div class="scanner-frame">
+      <div id="scanner-frame" class="scanner-frame" data-mode="idle">
         <video id="checkin-video" playsinline muted></video>
+        <div id="checkin-reader" class="checkin-reader" aria-label="QR camera scanner"></div>
         <div class="scanner-target" aria-hidden="true"></div>
       </div>
 
       <div class="checkin-actions">
         <button id="start-scanner" class="btn" type="button">Start Camera Scanner</button>
         <button id="stop-scanner" class="btn secondary" type="button" hidden>Stop Camera</button>
+        <button id="scan-image" class="btn secondary" type="button">Scan QR From Photo</button>
+        <input id="qr-image-input" type="file" accept="image/*" hidden>
       </div>
 
-      <p id="scanner-help" class="checkin-help">Camera scanning uses your device's built-in QR detector when available. You can always paste a ticket link below.</p>
+      <p id="scanner-help" class="checkin-help">Tap Start Camera Scanner and allow camera access when prompted. The scanner supports current iPhone/iPad Safari and modern Android browsers. You can also scan a saved QR image or paste a ticket link below.</p>
 
       <form id="manual-checkin-form" class="checkin-form manual-checkin-form">
         <label for="ticket-input">Ticket URL or token</label>
