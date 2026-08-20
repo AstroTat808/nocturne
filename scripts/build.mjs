@@ -13,6 +13,8 @@ const required = [
   'site/sitemap.xml',
   'site/assets/css/styles.css',
   'site/assets/css/premium.css',
+  'site/assets/css/polish.css',
+  'site/assets/css/hero-logo.css',
   'site/assets/css/admin.css',
   'site/assets/js/app.js',
   'site/assets/js/invite.js',
