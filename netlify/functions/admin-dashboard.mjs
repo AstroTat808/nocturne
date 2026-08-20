@@ -1,32 +1,307 @@
 import { getStore } from '@netlify/blobs';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
-const FORM_NAME='nocturne-application';
-const REVIEW_STORE='nocturne-application-reviews';
-const INVITE_STORE='nocturne-invites';
-const SESSION_COOKIE='nocturne_admin';
-const SESSION_TTL_SECONDS=8*60*60;
-const MAX_SUBMISSION_PAGES=10;
-const SUBMISSIONS_PER_PAGE=100;
-const REVIEW_STATUSES=new Set(['pending','shortlist','approved','declined']);
-function json(data,status=200,extraHeaders={}){return Response.json(data,{status,headers:{'Cache-Control':'no-store','Content-Type':'application/json; charset=utf-8',...extraHeaders}})}
-function constantTimeEqual(a='',b=''){const left=Buffer.from(String(a));const right=Buffer.from(String(b));if(left.length!==right.length)return false;return timingSafeEqual(left,right)}
-function base64url(value){return Buffer.from(value).toString('base64url')}
-function sessionSecret(){return process.env.NOCTURNE_ADMIN_SESSION_SECRET||process.env.NOCTURNE_ADMIN_KEY||''}
-function sign(value){return createHmac('sha256',sessionSecret()).update(value).digest('base64url')}
-function makeSessionToken(){const now=Math.floor(Date.now()/1000);const payload=base64url(JSON.stringify({role:'admin',iat:now,exp:now+SESSION_TTL_SECONDS,nonce:randomBytes(12).toString('base64url')}));return`${payload}.${sign(payload)}`}
-function parseCookies(req){const header=req.headers.get('cookie')||'';return Object.fromEntries(header.split(';').map(part=>{const index=part.indexOf('=');if(index<0)return['',''];return[part.slice(0,index).trim(),decodeURIComponent(part.slice(index+1).trim())]}).filter(([key])=>key))}
-function hasValidSession(req){if(!sessionSecret())return false;const token=parseCookies(req)[SESSION_COOKIE];if(!token||!token.includes('.'))return false;const[payload,signature]=token.split('.',2);if(!constantTimeEqual(signature,sign(payload)))return false;try{const parsed=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'));return parsed.role==='admin'&&Number(parsed.exp)>Math.floor(Date.now()/1000)}catch{return false}}
-function setSessionCookie(token){return`${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}`}
-function clearSessionCookie(){return`${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`}
-function normalizeCode(code){return String(code).trim().toUpperCase().replace(/\s+/g,'')}
-function hashCode(code){return createHash('sha256').update(normalizeCode(code)).digest('hex')}
-function makeCode(){const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';const bytes=randomBytes(12);let raw='';for(let i=0;i<12;i++)raw+=chars[bytes[i]%chars.length];return`NOC-${raw.slice(0,4)}-${raw.slice(4,8)}-${raw.slice(8,12)}`}
-async function readBody(req){try{return await req.json()}catch{return null}}
-function netlifyApiConfig(){return{siteId:process.env.SITE_ID||process.env.NETLIFY_SITE_ID||process.env.SITE_NAME||'',token:process.env.NETLIFY_API_TOKEN||''}}
-async function netlifyFetch(path){const{token}=netlifyApiConfig();if(!token)throw new Error('NETLIFY_API_TOKEN is not configured.');const response=await fetch(`https://api.netlify.com/api/v1${path}`,{headers:{Authorization:`Bearer ${token}`,Accept:'application/json'}});if(!response.ok){const text=await response.text();throw new Error(`Netlify API ${response.status}: ${text.slice(0,240)}`)}return response.json()}
-async function getApplications(){const{siteId}=netlifyApiConfig();if(!siteId)throw new Error('Netlify SITE_ID is unavailable at runtime.');const forms=await netlifyFetch(`/sites/${encodeURIComponent(siteId)}/forms`);const form=forms.find(entry=>entry.name===FORM_NAME);if(!form)return{applications:[],formSubmissionCount:0,warning:`Form ${FORM_NAME} was not found.`};const submissions=[];for(let page=1;page<=MAX_SUBMISSION_PAGES;page++){const batch=await netlifyFetch(`/forms/${encodeURIComponent(form.id)}/submissions?page=${page}&per_page=${SUBMISSIONS_PER_PAGE}`);submissions.push(...batch);if(batch.length<SUBMISSIONS_PER_PAGE)break}const reviewStore=getStore({name:REVIEW_STORE,consistency:'strong'});const applications=await Promise.all(submissions.map(async submission=>{const data=submission.data||{};const review=await reviewStore.get(submission.id,{type:'json',consistency:'strong'});return{id:submission.id,number:submission.number??null,createdAt:submission.created_at,fullName:data.full_name||submission.name||'',preferredName:data.preferred_name||'',email:data.email||submission.email||'',phone:data.phone||'',location:data.location||'',instagram:data.instagram||'',referral:data.referral||'',community:data.community||'',whyNocturne:data.why_nocturne||'',groupNames:data.group_names||'',conductAck:data.conduct_ack==='yes',selectionAck:data.selection_ack==='yes',privacyAck:data.privacy_ack==='yes',marketingOptIn:data.marketing_opt_in==='yes',review:review||{status:'pending',score:null,notes:'',updatedAt:null,inviteGeneratedAt:null}}}));applications.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));return{applications,formSubmissionCount:form.submission_count||submissions.length}}
-function summarize(applications){const stats={total:applications.length,pending:0,shortlist:0,approved:0,declined:0};for(const application of applications){const status=REVIEW_STATUSES.has(application.review?.status)?application.review.status:'pending';stats[status]+=1}return stats}
-async function saveReview(body){const submissionId=String(body.submissionId||'').trim();if(!/^[A-Za-z0-9_-]{6,128}$/.test(submissionId))return json({error:'Invalid submission ID.'},400);const status=String(body.status||'pending').toLowerCase();if(!REVIEW_STATUSES.has(status))return json({error:'Invalid review status.'},400);let score=body.score;if(score===''||score===undefined||score===null)score=null;else{score=Number(score);if(!Number.isInteger(score)||score<1||score>5)return json({error:'Score must be between 1 and 5.'},400)}const notes=String(body.notes||'').slice(0,5000);const store=getStore({name:REVIEW_STORE,consistency:'strong'});const current=await store.get(submissionId,{type:'json',consistency:'strong'})||{};const review={...current,status,score,notes,updatedAt:new Date().toISOString()};await store.setJSON(submissionId,review);return json({ok:true,review})}
-async function generateInvite(body){const submissionId=String(body.submissionId||'').trim();if(!/^[A-Za-z0-9_-]{6,128}$/.test(submissionId))return json({error:'Invalid submission ID.'},400);const reviewStore=getStore({name:REVIEW_STORE,consistency:'strong'});const review=await reviewStore.get(submissionId,{type:'json',consistency:'strong'});if(!review||review.status!=='approved')return json({error:'Application must be approved before creating an invite.'},409);if(review.inviteGeneratedAt)return json({error:'An invitation has already been generated for this application.'},409);const label=String(body.label||'Approved NOCTURNE guest').slice(0,120);const expiresAt=new Date(Date.now()+30*24*60*60*1000);const purchaseUrl=process.env.NOCTURNE_TICKET_URL||null;const inviteStore=getStore({name:INVITE_STORE,consistency:'strong'});let code,hash,saved=false;for(let tries=0;tries<5&&!saved;tries++){code=makeCode();hash=hashCode(code);const result=await inviteStore.setJSON(hash,{label,sourceSubmissionId:submissionId,createdAt:new Date().toISOString(),expiresAt:expiresAt.toISOString(),used:false,usedAt:null,purchaseUrl},{onlyIfNew:true});saved=result.modified}if(!saved)return json({error:'Could not create a unique invite code.'},500);const updatedReview={...review,inviteGeneratedAt:new Date().toISOString(),inviteExpiresAt:expiresAt.toISOString(),updatedAt:new Date().toISOString()};await reviewStore.setJSON(submissionId,updatedReview);return json({ok:true,code,expiresAt:expiresAt.toISOString(),review:updatedReview,note:'Copy this code now. The raw code is not stored in the review record.'},201)}
-export default async req=>{const url=new URL(req.url);const action=url.searchParams.get('action')||'';if(req.method==='POST'){const body=await readBody(req);if(!body)return json({error:'Invalid JSON body.'},400);const bodyAction=String(body.action||action||'');if(bodyAction==='login'){const adminKey=process.env.NOCTURNE_ADMIN_KEY||'';if(!adminKey||!sessionSecret())return json({error:'Admin authentication is not configured.'},500);if(!constantTimeEqual(body.password||'',adminKey))return json({error:'Invalid admin password.'},401);return json({ok:true,expiresIn:SESSION_TTL_SECONDS},200,{'Set-Cookie':setSessionCookie(makeSessionToken())})}if(bodyAction==='logout')return json({ok:true},200,{'Set-Cookie':clearSessionCookie()});if(!hasValidSession(req))return json({error:'Unauthorized.'},401);if(bodyAction==='review')return saveReview(body);if(bodyAction==='generate-invite')return generateInvite(body);return json({error:'Unknown action.'},400)}if(req.method!=='GET')return json({error:'Method not allowed.'},405);if(!hasValidSession(req))return json({authenticated:false},401);if(action==='session')return json({authenticated:true});if(action==='applications'){try{const result=await getApplications();return json({...result,stats:summarize(result.applications)})}catch(error){console.error('NOCTURNE admin application load failed:',error);return json({error:error.message||'Could not load applications.'},502)}}return json({authenticated:true})};
+const APPLICATION_STORE = 'nocturne-applications';
+const REVIEW_STORE = 'nocturne-application-reviews';
+const INVITE_STORE = 'nocturne-invites';
+const SESSION_COOKIE = 'nocturne_admin';
+const SESSION_TTL_SECONDS = 8 * 60 * 60;
+const REVIEW_STATUSES = new Set(['pending', 'shortlist', 'approved', 'declined']);
+
+function json(data, status = 200, extraHeaders = {}) {
+  return Response.json(data, {
+    status,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/json; charset=utf-8',
+      ...extraHeaders
+    }
+  });
+}
+
+function constantTimeEqual(a = '', b = '') {
+  const left = Buffer.from(String(a));
+  const right = Buffer.from(String(b));
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
+}
+
+function base64url(value) {
+  return Buffer.from(value).toString('base64url');
+}
+
+function sessionSecret() {
+  return process.env.NOCTURNE_ADMIN_SESSION_SECRET || process.env.NOCTURNE_ADMIN_KEY || '';
+}
+
+function sign(value) {
+  return createHmac('sha256', sessionSecret()).update(value).digest('base64url');
+}
+
+function makeSessionToken() {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = base64url(JSON.stringify({
+    role: 'admin',
+    iat: now,
+    exp: now + SESSION_TTL_SECONDS,
+    nonce: randomBytes(12).toString('base64url')
+  }));
+  return `${payload}.${sign(payload)}`;
+}
+
+function parseCookies(req) {
+  const header = req.headers.get('cookie') || '';
+  return Object.fromEntries(
+    header
+      .split(';')
+      .map((part) => {
+        const index = part.indexOf('=');
+        if (index < 0) return ['', ''];
+        return [part.slice(0, index).trim(), decodeURIComponent(part.slice(index + 1).trim())];
+      })
+      .filter(([key]) => key)
+  );
+}
+
+function hasValidSession(req) {
+  if (!sessionSecret()) return false;
+  const token = parseCookies(req)[SESSION_COOKIE];
+  if (!token || !token.includes('.')) return false;
+  const [payload, signature] = token.split('.', 2);
+  if (!constantTimeEqual(signature, sign(payload))) return false;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    return parsed.role === 'admin' && Number(parsed.exp) > Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
+  }
+}
+
+function setSessionCookie(token) {
+  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}`;
+}
+
+function clearSessionCookie() {
+  return `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
+}
+
+function normalizeCode(code) {
+  return String(code).trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function hashCode(code) {
+  return createHash('sha256').update(normalizeCode(code)).digest('hex');
+}
+
+function makeCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = randomBytes(12);
+  let raw = '';
+  for (let i = 0; i < 12; i++) raw += chars[bytes[i] % chars.length];
+  return `NOC-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+}
+
+async function readBody(req) {
+  try {
+    return await req.json();
+  } catch {
+    return null;
+  }
+}
+
+async function getApplications() {
+  const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
+  const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
+  const { blobs } = await applicationStore.list();
+
+  const applications = await Promise.all(
+    blobs.map(async ({ key }) => {
+      const application = await applicationStore.get(key, { type: 'json', consistency: 'strong' });
+      const review = await reviewStore.get(key, { type: 'json', consistency: 'strong' });
+      if (!application) return null;
+
+      return {
+        id: application.id || key,
+        number: null,
+        createdAt: application.createdAt,
+        fullName: application.fullName || '',
+        preferredName: application.preferredName || '',
+        email: application.email || '',
+        phone: application.phone || '',
+        location: application.location || '',
+        instagram: application.instagram || '',
+        referral: application.referral || '',
+        community: application.community || '',
+        whyNocturne: application.whyNocturne || '',
+        groupNames: application.groupNames || '',
+        conductAck: Boolean(application.conductAck),
+        selectionAck: Boolean(application.selectionAck),
+        privacyAck: Boolean(application.privacyAck),
+        marketingOptIn: Boolean(application.marketingOptIn),
+        review: review || {
+          status: 'pending',
+          score: null,
+          notes: '',
+          updatedAt: null,
+          inviteGeneratedAt: null
+        }
+      };
+    })
+  );
+
+  const filtered = applications.filter(Boolean);
+  filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return { applications: filtered, formSubmissionCount: filtered.length };
+}
+
+function summarize(applications) {
+  const stats = { total: applications.length, pending: 0, shortlist: 0, approved: 0, declined: 0 };
+  for (const application of applications) {
+    const status = REVIEW_STATUSES.has(application.review?.status) ? application.review.status : 'pending';
+    stats[status] += 1;
+  }
+  return stats;
+}
+
+async function saveReview(body) {
+  const submissionId = String(body.submissionId || '').trim();
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(submissionId)) {
+    return json({ error: 'Invalid submission ID.' }, 400);
+  }
+
+  const status = String(body.status || 'pending').toLowerCase();
+  if (!REVIEW_STATUSES.has(status)) {
+    return json({ error: 'Invalid review status.' }, 400);
+  }
+
+  let score = body.score;
+  if (score === '' || score === undefined || score === null) {
+    score = null;
+  } else {
+    score = Number(score);
+    if (!Number.isInteger(score) || score < 1 || score > 5) {
+      return json({ error: 'Score must be between 1 and 5.' }, 400);
+    }
+  }
+
+  const notes = String(body.notes || '').slice(0, 5000);
+  const store = getStore({ name: REVIEW_STORE, consistency: 'strong' });
+  const current = await store.get(submissionId, { type: 'json', consistency: 'strong' }) || {};
+  const review = { ...current, status, score, notes, updatedAt: new Date().toISOString() };
+  await store.setJSON(submissionId, review);
+  return json({ ok: true, review });
+}
+
+async function generateInvite(body) {
+  const submissionId = String(body.submissionId || '').trim();
+  if (!/^[A-Za-z0-9_-]{6,128}$/.test(submissionId)) {
+    return json({ error: 'Invalid submission ID.' }, 400);
+  }
+
+  const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
+  const review = await reviewStore.get(submissionId, { type: 'json', consistency: 'strong' });
+  if (!review || review.status !== 'approved') {
+    return json({ error: 'Application must be approved before creating an invite.' }, 409);
+  }
+  if (review.inviteGeneratedAt) {
+    return json({ error: 'An invitation has already been generated for this application.' }, 409);
+  }
+
+  const label = String(body.label || 'Approved NOCTURNE guest').slice(0, 120);
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const purchaseUrl = process.env.NOCTURNE_TICKET_URL || null;
+  const inviteStore = getStore({ name: INVITE_STORE, consistency: 'strong' });
+
+  let code;
+  let hash;
+  let saved = false;
+
+  for (let tries = 0; tries < 5 && !saved; tries++) {
+    code = makeCode();
+    hash = hashCode(code);
+    const result = await inviteStore.setJSON(
+      hash,
+      {
+        label,
+        sourceSubmissionId: submissionId,
+        createdAt: new Date().toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        used: false,
+        usedAt: null,
+        purchaseUrl
+      },
+      { onlyIfNew: true }
+    );
+    saved = result.modified;
+  }
+
+  if (!saved) return json({ error: 'Could not create a unique invite code.' }, 500);
+
+  const updatedReview = {
+    ...review,
+    inviteGeneratedAt: new Date().toISOString(),
+    inviteExpiresAt: expiresAt.toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  await reviewStore.setJSON(submissionId, updatedReview);
+
+  return json({
+    ok: true,
+    code,
+    expiresAt: expiresAt.toISOString(),
+    review: updatedReview,
+    note: 'Copy this code now. The raw code is not stored in the review record.'
+  }, 201);
+}
+
+export default async (req) => {
+  const url = new URL(req.url);
+  const action = url.searchParams.get('action') || '';
+
+  if (req.method === 'POST') {
+    const body = await readBody(req);
+    if (!body) return json({ error: 'Invalid JSON body.' }, 400);
+
+    const bodyAction = String(body.action || action || '');
+    if (bodyAction === 'login') {
+      const adminKey = process.env.NOCTURNE_ADMIN_KEY || '';
+      if (!adminKey || !sessionSecret()) {
+        return json({ error: 'Admin authentication is not configured.' }, 500);
+      }
+      if (!constantTimeEqual(body.password || '', adminKey)) {
+        return json({ error: 'Invalid admin password.' }, 401);
+      }
+      return json(
+        { ok: true, expiresIn: SESSION_TTL_SECONDS },
+        200,
+        { 'Set-Cookie': setSessionCookie(makeSessionToken()) }
+      );
+    }
+
+    if (bodyAction === 'logout') {
+      return json({ ok: true }, 200, { 'Set-Cookie': clearSessionCookie() });
+    }
+
+    if (!hasValidSession(req)) return json({ error: 'Unauthorized.' }, 401);
+    if (bodyAction === 'review') return saveReview(body);
+    if (bodyAction === 'generate-invite') return generateInvite(body);
+    return json({ error: 'Unknown action.' }, 400);
+  }
+
+  if (req.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
+  if (!hasValidSession(req)) return json({ authenticated: false }, 401);
+  if (action === 'session') return json({ authenticated: true });
+
+  if (action === 'applications') {
+    try {
+      const result = await getApplications();
+      return json({ ...result, stats: summarize(result.applications) });
+    } catch (error) {
+      console.error('NOCTURNE admin application load failed:', error);
+      return json({ error: error.message || 'Could not load applications.' }, 502);
+    }
+  }
+
+  return json({ authenticated: true });
+};
