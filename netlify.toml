@@ -13,6 +13,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/apply"
+  to = "/.netlify/functions/apply"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/redeem-invite"
   to = "/.netlify/functions/redeem-invite"
   status = 200
