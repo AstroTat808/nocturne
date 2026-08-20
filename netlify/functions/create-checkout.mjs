@@ -12,6 +12,22 @@ function json(data, status = 200) {
   });
 }
 
+function redirect(location) {
+  return new Response(null, {
+    status: 303,
+    headers: { Location: location, 'Cache-Control': 'no-store' }
+  });
+}
+
+function browserFormPost(req) {
+  return (req.headers.get('content-type') || '').toLowerCase().includes('application/x-www-form-urlencoded');
+}
+
+function fail(req, message, status) {
+  if (browserFormPost(req)) return redirect(`/ticket-access?checkout_error=${encodeURIComponent(message)}`);
+  return json({ error: message }, status);
+}
+
 function checkoutConfigured() {
   const price = Number(process.env.NOCTURNE_TICKET_PRICE_CENTS || 0);
   return Boolean(process.env.STRIPE_SECRET_KEY && Number.isInteger(price) && price >= 50);
@@ -39,11 +55,11 @@ export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
 
   const origin = req.headers.get('origin');
-  if (origin && origin !== new URL(req.url).origin) return json({ error: 'Origin not allowed.' }, 403);
+  if (origin && origin !== new URL(req.url).origin) return fail(req, 'Origin not allowed.', 403);
 
   const access = readTicketAccess(req);
-  if (!access) return json({ error: 'Private ticket access has expired. Redeem a new invitation to continue.' }, 401);
-  if (!checkoutConfigured()) return json({ error: 'Ticket checkout is not configured yet.' }, 503);
+  if (!access) return fail(req, 'Private ticket access has expired. Redeem a new invitation to continue.', 401);
+  if (!checkoutConfigured()) return fail(req, 'Ticket checkout is not configured yet.', 503);
 
   const submissionId = access.submissionId;
   const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
@@ -56,15 +72,15 @@ export default async (req) => {
   ]);
 
   if (!application || !review || review.status !== 'approved' || review.inviteState !== 'redeemed') {
-    return json({ error: 'This invitation is not eligible for ticket checkout.' }, 403);
+    return fail(req, 'This invitation is not eligible for ticket checkout.', 403);
   }
 
   if (review.ticketState === 'paid' && review.stripeCheckoutSessionId) {
-    return json({ error: 'A ticket has already been purchased for this invitation.' }, 409);
+    return fail(req, 'A ticket has already been purchased for this invitation.', 409);
   }
 
   const existing = await orderStore.get(`submission-${submissionId}`, { type: 'json', consistency: 'strong' });
-  if (existing?.status === 'paid') return json({ error: 'A ticket has already been purchased for this invitation.' }, 409);
+  if (existing?.status === 'paid') return fail(req, 'A ticket has already been purchased for this invitation.', 409);
 
   const unitAmount = Number(process.env.NOCTURNE_TICKET_PRICE_CENTS);
   const currency = String(process.env.NOCTURNE_TICKET_CURRENCY || 'usd').toLowerCase();
@@ -112,9 +128,10 @@ export default async (req) => {
       updatedAt: createdAt
     });
 
+    if (browserFormPost(req)) return redirect(session.url);
     return json({ ok: true, checkoutUrl: session.url });
   } catch (error) {
     console.error('NOCTURNE Stripe checkout creation failed:', error);
-    return json({ error: 'Ticket checkout could not be started. Please try again.' }, 502);
+    return fail(req, 'Ticket checkout could not be started. Please try again.', 502);
   }
 };
