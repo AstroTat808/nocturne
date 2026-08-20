@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#030303">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Wild Ones Admin | NOCTURNE</title>
+  <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+  <script src="/assets/js/admin.js" defer></script>
+</head>
+<body class="admin-body">
+  <header class="admin-topbar">
+    <a class="admin-brand" href="/" aria-label="NOCTURNE Festival home">
+      <img src="/assets/images/favicon.png" alt="" width="52" height="52">
+      <span><strong>NOCTURNE</strong><small>Wild Ones review desk</small></span>
+    </a>
+    <div class="admin-top-actions">
+      <a href="/" target="_blank" rel="noopener noreferrer">View site ↗</a>
+      <button id="admin-logout" class="admin-text-button" type="button" hidden>Sign out</button>
+    </div>
+  </header>
+
+  <main class="admin-shell">
+    <section id="admin-login" class="admin-login-card" aria-labelledby="login-title">
+      <p class="admin-kicker">Private operations</p>
+      <h1 id="login-title">Wild Ones<br><em>review desk.</em></h1>
+      <p>Enter the private NOCTURNE admin password to review applications and issue invitation codes.</p>
+      <form id="admin-login-form" class="admin-login-form">
+        <label for="admin-password">Admin password</label>
+        <input id="admin-password" name="password" type="password" autocomplete="current-password" required autofocus>
+        <button class="btn" type="submit">Enter Review Desk →</button>
+        <p id="admin-login-status" class="admin-status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section id="admin-dashboard" class="admin-dashboard" hidden>
+      <div class="admin-heading-row">
+        <div>
+          <p class="admin-kicker">Invitation applications</p>
+          <h1>Guest review.</h1>
+          <p class="admin-muted">Review applicant context, record internal notes, score fit, and move applicants through the invitation workflow.</p>
+        </div>
+        <button id="admin-refresh" class="admin-outline-button" type="button">Refresh applications</button>
+      </div>
+
+      <div class="admin-stats" aria-label="Application summary">
+        <article><span id="stat-total">0</span><small>Total</small></article>
+        <article><span id="stat-pending">0</span><small>Pending</small></article>
+        <article><span id="stat-shortlist">0</span><small>Shortlist</small></article>
+        <article><span id="stat-approved">0</span><small>Approved</small></article>
+        <article><span id="stat-declined">0</span><small>Declined</small></article>
+      </div>
+
+      <div class="admin-toolbar">
+        <label class="admin-search"><span>Search</span><input id="admin-search" type="search" placeholder="Name, email, Instagram, referral…" autocomplete="off"></label>
+        <label><span>Status</span><select id="admin-status-filter"><option value="all">All applications</option><option value="pending">Pending</option><option value="shortlist">Shortlist</option><option value="approved">Approved</option><option value="declined">Declined</option></select></label>
+      </div>
+
+      <p id="admin-load-status" class="admin-status" role="status" aria-live="polite"></p>
+
+      <div class="admin-workspace">
+        <section class="admin-list-panel" aria-label="Applications">
+          <div class="admin-list-head"><span>Applicant</span><span>Submitted</span><span>Status</span></div>
+          <div id="admin-application-list" class="admin-application-list"></div>
+          <div id="admin-empty" class="admin-empty" hidden>No applications match this view.</div>
+        </section>
+        <aside id="admin-detail" class="admin-detail" aria-label="Selected application"><div class="admin-detail-placeholder"><img src="/assets/images/favicon.png" alt="" width="92" height="92"><p>Select an application to review.</p></div></aside>
+      </div>
+    </section>
+  </main>
+
+  <div id="invite-modal" class="invite-modal" hidden role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
+    <div class="invite-modal-card">
+      <p class="admin-kicker">Invitation created</p>
+      <h2 id="invite-modal-title">Copy this code now.</h2>
+      <p>The raw code is shown once here and is not stored in the application review record.</p>
+      <code id="generated-invite-code"></code>
+      <div class="invite-modal-actions"><button id="copy-invite-code" class="btn" type="button">Copy invite code</button><button id="close-invite-modal" class="admin-outline-button" type="button">Close</button></div>
+      <p id="invite-copy-status" class="admin-status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</body>
+</html>
