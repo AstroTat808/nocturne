@@ -73,15 +73,41 @@ document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
 const form = document.querySelector('#application-form');
 if (form) {
   const status = form.querySelector('.form-status');
-  form.addEventListener('submit', (event) => {
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
     const narrative = form.querySelector('[name="why_nocturne"]');
     if (narrative && narrative.value.trim().length < 50) {
-      event.preventDefault();
       status.textContent = 'Please tell us a little more — at least 50 characters.';
       narrative.focus();
       return;
     }
+
+    if (!form.reportValidity()) return;
+
     status.textContent = 'Submitting your request…';
+    if (submitButton) submitButton.disabled = true;
+
+    try {
+      const formData = new FormData(form);
+      const response = await fetch('/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(formData).toString()
+      });
+
+      if (!response.ok) {
+        throw new Error(`Submission failed with status ${response.status}`);
+      }
+
+      window.location.assign('/application-received');
+    } catch (error) {
+      console.error('NOCTURNE application submission failed:', error);
+      status.textContent = 'Your request could not be submitted. Please try again.';
+      if (submitButton) submitButton.disabled = false;
+    }
   });
 }
 
