@@ -6,7 +6,7 @@
   "description": "NOCTURNE Festival — invitation-only event site for Netlify + GitHub.",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "check": "node --check netlify/functions/redeem-invite.mjs && node --check netlify/functions/create-invites.mjs && node --check netlify/functions/admin-dashboard.mjs && node --check site/assets/js/app.js && node --check site/assets/js/invite.js && node --check site/assets/js/admin.js",
+    "check": "node --check netlify/functions/apply.mjs && node --check netlify/functions/redeem-invite.mjs && node --check netlify/functions/create-invites.mjs && node --check netlify/functions/admin-dashboard.mjs && node --check site/assets/js/app.js && node --check site/assets/js/invite.js && node --check site/assets/js/admin.js",
     "invite:create": "node scripts/create-invites.mjs"
   },
   "dependencies": {
