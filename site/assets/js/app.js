@@ -2,8 +2,6 @@ const header = document.querySelector('.site-header');
 const menuToggle = document.querySelector('.menu-toggle');
 const nav = document.querySelector('.nav');
 
-// Load the premium presentation layer after the base stylesheet so it can
-// enhance shared navigation and the homepage hero without changing legal pages.
 if (!document.querySelector('link[data-nocturne-premium]')) {
   const premiumStyles = document.createElement('link');
   premiumStyles.rel = 'stylesheet';
@@ -12,8 +10,6 @@ if (!document.querySelector('link[data-nocturne-premium]')) {
   document.head.appendChild(premiumStyles);
 }
 
-// Blend the existing moon artwork into dark surfaces site-wide so the baked-in
-// square background does not read as a visible card in the header or footer.
 if (!document.querySelector('link[data-nocturne-icons]')) {
   const iconStyles = document.createElement('link');
   iconStyles.rel = 'stylesheet';
@@ -22,7 +18,6 @@ if (!document.querySelector('link[data-nocturne-icons]')) {
   document.head.appendChild(iconStyles);
 }
 
-// Preserve the supplied 1536x768 NOCTURNE logo at its native 2:1 aspect ratio.
 const heroLogo = document.querySelector('.hero-logo');
 if (heroLogo) {
   heroLogo.setAttribute('width', '1536');
@@ -92,20 +87,24 @@ if (form) {
 
     try {
       const formData = new FormData(form);
-      const response = await fetch('/', {
+      const response = await fetch('/api/apply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Nocturne-Ajax': '1'
+        },
         body: new URLSearchParams(formData).toString()
       });
 
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(`Submission failed with status ${response.status}`);
+        throw new Error(result.error || `Submission failed with status ${response.status}`);
       }
 
-      window.location.assign('/application-received');
+      window.location.assign('/application-received.html');
     } catch (error) {
       console.error('NOCTURNE application submission failed:', error);
-      status.textContent = 'Your request could not be submitted. Please try again.';
+      status.textContent = error.message || 'Your request could not be submitted. Please try again.';
       if (submitButton) submitButton.disabled = false;
     }
   });
@@ -162,8 +161,10 @@ if (canvas && !reduceMotion) {
   let w, h, dpr, particles;
   const resize = () => {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    w = canvas.clientWidth; h = canvas.clientHeight;
-    canvas.width = w * dpr; canvas.height = h * dpr;
+    w = canvas.clientWidth;
+    h = canvas.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     particles = Array.from({ length: Math.min(130, Math.floor(w / 9)) }, () => ({
       x: Math.random() * w,
@@ -179,7 +180,10 @@ if (canvas && !reduceMotion) {
     for (const p of particles) {
       p.y -= p.s;
       p.t += .012;
-      if (p.y < -2) { p.y = h + 2; p.x = Math.random() * w; }
+      if (p.y < -2) {
+        p.y = h + 2;
+        p.x = Math.random() * w;
+      }
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       const twinkle = Math.max(.08, p.a + Math.sin(p.t) * .12);
@@ -188,6 +192,7 @@ if (canvas && !reduceMotion) {
     }
     requestAnimationFrame(draw);
   };
-  resize(); draw();
+  resize();
+  draw();
   window.addEventListener('resize', resize, { passive: true });
 }
