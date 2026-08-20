@@ -37,6 +37,12 @@
   force = true
 
 [[redirects]]
+  from = "/ticket-access"
+  to = "/.netlify/functions/ticket-access"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/apply"
   to = "/index.html#apply"
   status = 301
@@ -86,6 +92,12 @@
   [headers.values]
     Cache-Control = "no-store"
     X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/ticket-access*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
 
 [[headers]]
   for = "/admin*"
