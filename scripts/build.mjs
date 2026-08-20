@@ -23,6 +23,7 @@ const required = [
   'site/assets/images/favicon.png',
   'site/assets/images/nocturne-logo.webp',
   'site/assets/images/hero-woman.webp',
+  'netlify/functions/apply.mjs',
   'netlify/functions/redeem-invite.mjs',
   'netlify/functions/create-invites.mjs',
   'netlify/functions/admin-dashboard.mjs'
