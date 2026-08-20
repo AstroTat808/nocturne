@@ -36,6 +36,11 @@
   status = 301
 
 [[redirects]]
+  from = "/application-received"
+  to = "/application-received.html"
+  status = 200
+
+[[redirects]]
   from = "/invite"
   to = "/invite.html"
   status = 200
@@ -83,7 +88,7 @@
     X-Robots-Tag = "noindex, nofollow, noarchive"
 
 [[headers]]
-  for = "/application-received.html"
+  for = "/application-received*"
   [headers.values]
     Cache-Control = "no-store"
     X-Robots-Tag = "noindex, nofollow"
