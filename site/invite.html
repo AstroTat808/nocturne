@@ -15,7 +15,7 @@
       <p class="section-kicker">Private Access</p>
       <h1>Your night<br>begins here.</h1>
       <p>Enter the invitation code provided with your acceptance. Valid codes unlock the private ticket path and may only be redeemed once.</p>
-      <form id="invite-form" class="invite-form">
+      <form id="invite-form" class="invite-form" method="POST" action="/api/redeem-invite">
         <label class="field"><span style="position:absolute;left:-9999px">Invitation code</span><input name="code" required autocomplete="off" inputmode="text" placeholder="NOC-XXXX-XXXX-XXXX" pattern="NOC-[A-Za-z2-9]{4}-[A-Za-z2-9]{4}-[A-Za-z2-9]{4}"></label>
         <button class="btn" type="submit">Verify Invitation →</button>
       </form>
