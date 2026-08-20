@@ -231,6 +231,15 @@ input::placeholder, textarea::placeholder { color: #5f584e; }
 .success-shell { min-height: 100svh; display: grid; place-items: center; padding: 7rem 1.2rem 3rem; }
 .success-card { text-align: center; width: min(700px,100%); }
 .success-card img { width: 180px; margin: 0 auto; }
+.success-card .success-logo {
+  width: min(760px, 92vw);
+  height: auto;
+  aspect-ratio: 2 / 1;
+  object-fit: contain;
+  margin: 0 auto 1.5rem;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 16px rgba(216,154,43,.14)) drop-shadow(0 0 42px rgba(216,154,43,.08));
+}
 .success-card h1 { font-family: var(--serif); font-size: clamp(3rem,8vw,5.5rem); line-height: .95; font-weight: 500; }
 .success-card p { color: #a99c88; max-width: 590px; margin: 1rem auto; }
 
@@ -258,15 +267,5 @@ input::placeholder, textarea::placeholder { color: #5f584e; }
   .hero { padding-inline: 1rem; }
   .hero-logo { margin-left: -2%; width: 100%; }
   .hero-tagline { font-size: 1.8rem; }
-  .hero-actions .btn { width: 100%; }
-  .process-grid, .field-grid { grid-template-columns: 1fr; }
-  .field.full { grid-column: auto; }
-  .footer-grid { grid-template-columns: 1fr; }
-  .footer-grid > :first-child { grid-column: auto; }
-  .footer-bottom { flex-direction: column; }
-  .application-form { padding: 1.1rem; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .001ms !important; }
+  .success-card .success-logo { width: 100%; }
 }
