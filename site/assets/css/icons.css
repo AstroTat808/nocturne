@@ -1,0 +1,70 @@
+/* Blend the existing NOCTURNE moon artwork into dark site surfaces without a visible square edge. */
+
+.brand img,
+.footer-mark {
+  display: block;
+  object-fit: contain !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  mix-blend-mode: screen;
+  filter:
+    brightness(1.06)
+    contrast(1.08)
+    drop-shadow(0 0 8px rgba(255,202,97,.18))
+    drop-shadow(0 0 24px rgba(216,154,43,.12));
+  transform: translateZ(0);
+}
+
+.brand {
+  isolation: auto !important;
+}
+
+.brand::before {
+  opacity: .55 !important;
+}
+
+.brand img {
+  width: 58px !important;
+  height: 58px !important;
+  transition: transform .3s ease, filter .3s ease;
+}
+
+.brand:hover img,
+.brand:focus-visible img {
+  transform: scale(1.05);
+  filter:
+    brightness(1.1)
+    contrast(1.1)
+    drop-shadow(0 0 10px rgba(255,202,97,.27))
+    drop-shadow(0 0 30px rgba(216,154,43,.17));
+}
+
+.footer-brand-lockup {
+  isolation: auto !important;
+}
+
+.footer-mark {
+  width: 74px !important;
+  height: 74px !important;
+}
+
+@media (max-width: 900px) {
+  .brand img {
+    width: 52px !important;
+    height: 52px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .brand img {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  .footer-mark {
+    width: 64px !important;
+    height: 64px !important;
+  }
+}
