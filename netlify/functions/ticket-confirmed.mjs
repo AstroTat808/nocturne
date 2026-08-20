@@ -1,4 +1,5 @@
 import { getStore } from '@netlify/blobs';
+import { makeTicketToken } from './_ticket-token.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 
@@ -11,7 +12,7 @@ function escapeHtml(value = '') {
     .replaceAll("'", '&#039;');
 }
 
-function page({ paid = false, pending = false, ticketId = '', amount = '', message = '' }) {
+function page({ paid = false, pending = false, ticketId = '', amount = '', digitalTicketUrl = '', message = '' }) {
   const heading = paid ? 'Your ticket is confirmed.' : pending ? 'Payment received.' : 'We could not confirm that ticket.';
   const kicker = paid ? 'Ticket Confirmed' : pending ? 'Finalizing Purchase' : 'Ticket Status';
   const detail = paid
@@ -24,6 +25,7 @@ function page({ paid = false, pending = false, ticketId = '', amount = '', messa
     : pending
       ? '<div class="private-access-status"><strong>Finalizing your ticket…</strong><br>This normally takes only a few seconds. Refresh this page shortly if needed.</div>'
       : '<div class="private-access-status"><strong>No paid ticket was found for this session.</strong></div>';
+  const ticketAction = paid && digitalTicketUrl ? `<a class="btn" href="${escapeHtml(digitalTicketUrl)}">Open Digital Ticket →</a>` : '';
 
   return `<!doctype html>
 <html lang="en">
@@ -47,8 +49,8 @@ function page({ paid = false, pending = false, ticketId = '', amount = '', messa
       <h1 id="ticket-title">${escapeHtml(heading)}</h1>
       <p>${detail}</p>
       ${status}
-      <p>${paid ? 'A confirmation email has been sent or queued to the email address on your application.' : 'Do not submit another payment unless this page continues to show an error after Stripe has finished processing.'}</p>
-      <div class="private-access-actions"><a class="btn" href="/">Return to NOCTURNE</a></div>
+      <p>${paid ? 'Your digital ticket contains the unique QR code you will present at event check-in.' : 'Do not submit another payment unless this page continues to show an error after Stripe has finished processing.'}</p>
+      <div class="private-access-actions">${ticketAction}<a class="btn secondary" href="/">Return to NOCTURNE</a></div>
     </section>
   </main>
 </body>
@@ -79,7 +81,10 @@ export default async (req) => {
     const amount = Number.isFinite(Number(order.amountTotal))
       ? `${String(order.currency || 'usd').toUpperCase()} ${(Number(order.amountTotal) / 100).toFixed(2)}`
       : '';
-    html = page({ paid: true, ticketId: order.ticketId || 'Confirmed', amount });
+    const token = makeTicketToken(order.ticketId, order.submissionId);
+    const base = (process.env.NOCTURNE_SITE_URL || url.origin).replace(/\/$/, '');
+    const digitalTicketUrl = order.digitalTicketUrl || (token ? `${base}/ticket?token=${encodeURIComponent(token)}` : '');
+    html = page({ paid: true, ticketId: order.ticketId || 'Confirmed', amount, digitalTicketUrl });
   } else {
     html = page({ pending: true });
     status = 202;
