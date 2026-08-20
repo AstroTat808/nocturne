@@ -2,6 +2,24 @@ const header = document.querySelector('.site-header');
 const menuToggle = document.querySelector('.menu-toggle');
 const nav = document.querySelector('.nav');
 
+// Preserve the supplied 1536x768 NOCTURNE logo at its native 2:1 aspect ratio.
+// This intentionally overrides any inherited sizing that could distort it.
+const heroLogo = document.querySelector('.hero-logo');
+if (heroLogo) {
+  heroLogo.setAttribute('width', '1536');
+  heroLogo.setAttribute('height', '768');
+  Object.assign(heroLogo.style, {
+    width: 'min(760px, 100%)',
+    height: 'auto',
+    aspectRatio: '2 / 1',
+    objectFit: 'contain',
+    maxWidth: '100%',
+    marginLeft: '0',
+    transform: 'none',
+    flexShrink: '0'
+  });
+}
+
 const onScroll = () => header?.classList.toggle('scrolled', window.scrollY > 30);
 onScroll();
 window.addEventListener('scroll', onScroll, { passive: true });
