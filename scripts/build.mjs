@@ -19,6 +19,7 @@ const required = [
   'site/assets/css/admin.css',
   'site/assets/css/admin-invites.css',
   'site/assets/css/success.css',
+  'site/assets/css/private-access.css',
   'site/assets/js/app.js',
   'site/assets/js/invite.js',
   'site/assets/js/admin.js',
