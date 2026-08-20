@@ -1,0 +1,27 @@
+/* Transparent treatment for the existing NOCTURNE logo artwork.
+   Black pixels become transparent in browsers that support luminance masks;
+   screen blending remains the graceful fallback. */
+
+.hero-logo {
+  mix-blend-mode: screen !important;
+  background: transparent !important;
+}
+
+@supports (mask-mode: luminance) {
+  .hero-logo {
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    -webkit-mask-size: contain;
+    mask-image: url('/assets/images/nocturne-logo.webp');
+    mask-mode: luminance;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
+    mix-blend-mode: normal !important;
+    filter:
+      brightness(1.28)
+      saturate(1.06)
+      drop-shadow(0 0 12px rgba(255,202,97,.13))
+      drop-shadow(0 0 36px rgba(216,154,43,.10));
+  }
+}
