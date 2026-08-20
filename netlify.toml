@@ -12,13 +12,6 @@
   status = 301
   force = true
 
-# Serve the new crescent artwork anywhere the existing favicon path is used.
-[[redirects]]
-  from = "/assets/images/favicon.png"
-  to = "/assets/images/favicon-nocturne.svg"
-  status = 200
-  force = true
-
 [[redirects]]
   from = "/api/redeem-invite"
   to = "/.netlify/functions/redeem-invite"
