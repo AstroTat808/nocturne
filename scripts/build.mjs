@@ -28,7 +28,11 @@ const required = [
   'site/assets/images/hero-woman.webp',
   'netlify/functions/apply.mjs',
   'netlify/functions/redeem-invite.mjs',
+  'netlify/functions/_ticket-auth.mjs',
   'netlify/functions/ticket-access.mjs',
+  'netlify/functions/create-checkout.mjs',
+  'netlify/functions/stripe-webhook.mjs',
+  'netlify/functions/ticket-confirmed.mjs',
   'netlify/functions/create-invites.mjs',
   'netlify/functions/admin-dashboard.mjs'
 ];
