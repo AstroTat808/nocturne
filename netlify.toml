@@ -107,8 +107,9 @@
 
 [[redirects]]
   from = "/invite"
-  to = "/invite.html"
+  to = "/.netlify/functions/invite-view"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/admin"
