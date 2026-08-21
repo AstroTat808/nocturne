@@ -10,13 +10,14 @@
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/admin.css">
   <link rel="stylesheet" href="/assets/css/admin-invites.css">
+  <link rel="stylesheet" href="/assets/css/admin-tickets.css">
   <script src="/assets/js/admin.js" defer></script>
 </head>
 <body class="admin-body">
   <header class="admin-topbar">
     <a class="admin-brand" href="/" aria-label="NOCTURNE Festival home">
       <img src="/assets/images/favicon.png" alt="" width="52" height="52">
-      <span><strong>NOCTURNE</strong><small>Wild Ones review desk</small></span>
+      <span><strong>NOCTURNE</strong><small>Wild Ones operations desk</small></span>
     </a>
     <div class="admin-top-actions">
       <a class="admin-checkin-link" href="/check-in">Event check-in ↗</a>
@@ -28,12 +29,12 @@
   <main class="admin-shell">
     <section id="admin-login" class="admin-login-card" aria-labelledby="login-title">
       <p class="admin-kicker">Private operations</p>
-      <h1 id="login-title">Wild Ones<br><em>review desk.</em></h1>
-      <p>Enter the private NOCTURNE admin password to review applications and manage invitations.</p>
+      <h1 id="login-title">Wild Ones<br><em>operations desk.</em></h1>
+      <p>Enter the private NOCTURNE admin password to review applications, manage invitations, tickets, refunds, and guest operations.</p>
       <form id="admin-login-form" class="admin-login-form">
         <label for="admin-password">Admin password</label>
         <input id="admin-password" name="password" type="password" autocomplete="current-password" required autofocus>
-        <button class="btn" type="submit">Enter Review Desk →</button>
+        <button class="btn" type="submit">Enter Operations Desk →</button>
         <p id="admin-login-status" class="admin-status" role="status" aria-live="polite"></p>
       </form>
     </section>
@@ -41,11 +42,11 @@
     <section id="admin-dashboard" class="admin-dashboard" hidden>
       <div class="admin-heading-row">
         <div>
-          <p class="admin-kicker">Invitation applications</p>
-          <h1>Guest review.</h1>
-          <p class="admin-muted">Review applicants, record decisions, manage invitation codes, and send approval messages.</p>
+          <p class="admin-kicker">NOCTURNE operations</p>
+          <h1>Guest operations.</h1>
+          <p class="admin-muted">Review applicants, manage invitation codes, track ticket sales, resend digital tickets, process eligible refunds, and monitor event check-in.</p>
         </div>
-        <button id="admin-refresh" class="admin-outline-button" type="button">Refresh applications</button>
+        <button id="admin-refresh" class="admin-outline-button" type="button">Refresh dashboard</button>
       </div>
 
       <nav class="admin-operations-nav" aria-label="NOCTURNE operations">
@@ -53,6 +54,19 @@
         <a class="admin-operation-card" href="/invite" target="_blank" rel="noopener noreferrer"><strong>Invite Redemption</strong><span>Open guest redemption page ↗</span></a>
         <a class="admin-operation-card" href="/" target="_blank" rel="noopener noreferrer"><strong>Public Site</strong><span>View NOCTURNE homepage ↗</span></a>
       </nav>
+
+      <section class="admin-ticket-overview" aria-labelledby="ticket-ops-title">
+        <div class="admin-ticket-overview-head">
+          <div><p class="admin-kicker">Ticket operations</p><h2 id="ticket-ops-title">Sales & admission.</h2></div>
+          <div class="admin-ticket-revenue"><small>Net collected</small><strong id="ticket-revenue">$0.00</strong><span id="ticket-gross"></span></div>
+        </div>
+        <div class="admin-ticket-stats" aria-label="Ticket status summary">
+          <button type="button" class="admin-ticket-stat" data-ticket-state-filter="paid"><span id="ticket-stat-paid">0</span><small>Paid</small><em>Ready for entry</em></button>
+          <button type="button" class="admin-ticket-stat" data-ticket-state-filter="checked_in"><span id="ticket-stat-checked-in">0</span><small>Checked In</small><em>Admitted guests</em></button>
+          <button type="button" class="admin-ticket-stat" data-ticket-state-filter="checkout_created"><span id="ticket-stat-checkout">0</span><small>Checkout Opened</small><em>Not yet paid</em></button>
+          <button type="button" class="admin-ticket-stat" data-ticket-state-filter="refunded"><span id="ticket-stat-refunded">0</span><small>Refunded</small><em>Ticket invalidated</em></button>
+        </div>
+      </section>
 
       <div class="admin-stats" aria-label="Application summary">
         <article><span id="stat-total">0</span><small>Total</small></article>
@@ -75,17 +89,18 @@
         </div>
       </section>
 
-      <div class="admin-toolbar">
-        <label class="admin-search"><span>Search</span><input id="admin-search" type="search" placeholder="Name, email, Instagram, referral…" autocomplete="off"></label>
+      <div class="admin-toolbar admin-toolbar-ops">
+        <label class="admin-search"><span>Search</span><input id="admin-search" type="search" placeholder="Name, email, ticket ID, Stripe ID…" autocomplete="off"></label>
         <label><span>Application status</span><select id="admin-status-filter"><option value="all">All applications</option><option value="pending">Pending</option><option value="shortlist">Shortlist</option><option value="approved">Approved</option><option value="declined">Declined</option></select></label>
         <label><span>Invite status</span><select id="admin-invite-filter"><option value="all">All invite states</option><option value="none">No invite</option><option value="active">Active</option><option value="redeemed">Redeemed</option><option value="revoked">Revoked</option><option value="expired">Expired</option></select></label>
+        <label><span>Ticket status</span><select id="admin-ticket-filter"><option value="all">All ticket states</option><option value="none">No ticket</option><option value="checkout_created">Checkout opened</option><option value="paid">Paid</option><option value="checked_in">Checked in</option><option value="refunded">Refunded</option></select></label>
       </div>
 
       <p id="admin-load-status" class="admin-status" role="status" aria-live="polite"></p>
 
       <div class="admin-workspace">
         <section class="admin-list-panel" aria-label="Applications">
-          <div class="admin-list-head"><span>Applicant</span><span>Submitted</span><span>Status</span></div>
+          <div class="admin-list-head"><span>Applicant</span><span>Ticket</span><span>Status</span></div>
           <div id="admin-application-list" class="admin-application-list"></div>
           <div id="admin-empty" class="admin-empty" hidden>No applications match this view.</div>
         </section>
