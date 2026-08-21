@@ -25,6 +25,7 @@ const required = [
   'site/assets/css/hero-logo.css',
   'site/assets/css/mobile.css',
   'site/assets/css/icons.css',
+  'site/assets/css/event-details.css',
   'site/assets/css/admin.css',
   'site/assets/css/admin-invites.css',
   'site/assets/css/admin-tickets.css',
