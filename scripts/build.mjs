@@ -33,6 +33,8 @@ const required = [
   'site/assets/js/app.js',
   'site/assets/js/invite.js',
   'site/assets/js/admin.js',
+  'site/assets/js/admin-comp.js',
+  'site/assets/js/admin-email.js',
   'site/assets/js/admin-refund.js',
   'site/assets/js/check-in.js',
   'site/assets/js/ticket-view.js',
@@ -52,7 +54,9 @@ const required = [
   'netlify/functions/ticket-qr.mjs',
   'netlify/functions/check-in.mjs',
   'netlify/functions/create-invites.mjs',
-  'netlify/functions/admin-dashboard.mjs'
+  'netlify/functions/admin-dashboard.mjs',
+  'netlify/functions/admin-comp-ticket.mjs',
+  'netlify/functions/admin-approval-email.mjs'
 ];
 
 for (const file of required) await access(file);
