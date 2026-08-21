@@ -10,6 +10,7 @@ const required = [
   'site/index.html',
   'site/invite.html',
   'site/admin.html',
+  'site/admin-launch.html',
   'site/check-in.html',
   'site/privacy.html',
   'site/terms.html',
@@ -37,6 +38,7 @@ const required = [
   'site/assets/js/admin-comp.js',
   'site/assets/js/admin-email.js',
   'site/assets/js/admin-refund.js',
+  'site/assets/js/admin-launch.js',
   'site/assets/js/check-in.js',
   'site/assets/js/ticket-view.js',
   'site/assets/vendor/html5-qrcode.min.js',
@@ -59,6 +61,7 @@ const required = [
   'netlify/functions/create-invites.mjs',
   'netlify/functions/admin-auth.mjs',
   'netlify/functions/admin-applications.mjs',
+  'netlify/functions/admin-launch.mjs',
   'netlify/functions/admin-dashboard.mjs',
   'netlify/functions/admin-comp-ticket.mjs',
   'netlify/functions/admin-approval-email.mjs'
