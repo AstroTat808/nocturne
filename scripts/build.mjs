@@ -58,6 +58,7 @@ const required = [
   'netlify/functions/check-in.mjs',
   'netlify/functions/create-invites.mjs',
   'netlify/functions/admin-auth.mjs',
+  'netlify/functions/admin-applications.mjs',
   'netlify/functions/admin-dashboard.mjs',
   'netlify/functions/admin-comp-ticket.mjs',
   'netlify/functions/admin-approval-email.mjs'
