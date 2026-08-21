@@ -1,9 +1,13 @@
 import { getStore } from '@netlify/blobs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 const APPLICATION_STORE = 'nocturne-applications';
+const RATE_STORE = 'nocturne-application-rate-limits';
 const APPLICATION_NOTIFY_TO = process.env.NOCTURNE_APPLICATION_NOTIFY_TO || 'invites@nocturnefestival.com';
 const HELP_EMAIL = process.env.NOCTURNE_HELP_EMAIL || 'help@nocturnefestival.com';
+const RATE_WINDOW_MS = 60 * 60 * 1000;
+const RATE_MAX = 5;
+const DUPLICATE_WINDOW_MS = 30 * 60 * 1000;
 const MAX = {
   full_name: 120,
   preferred_name: 120,
@@ -30,19 +34,25 @@ function escapeHtml(value = '') {
     .replaceAll("'", '&#039;');
 }
 
-function formatPhone(value = '') {
+function phoneDigits(value = '') {
   let digits = String(value).replace(/\D/g, '');
   if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+  return digits;
+}
+
+function formatPhone(value = '') {
+  const digits = phoneDigits(value);
   if (digits.length !== 10) return clean(value, MAX.phone);
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-function json(data, status = 200) {
+function json(data, status = 200, extraHeaders = {}) {
   return Response.json(data, {
     status,
     headers: {
       'Cache-Control': 'no-store',
-      'Content-Type': 'application/json; charset=utf-8'
+      'Content-Type': 'application/json; charset=utf-8',
+      ...extraHeaders
     }
   });
 }
@@ -73,7 +83,7 @@ function validate(fields) {
 
   if (!fullName) return 'Full name is required.';
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'A valid email address is required.';
-  if (!phone) return 'Mobile number is required.';
+  if (phoneDigits(phone).length !== 10) return 'Please enter a valid 10-digit mobile number.';
   if (!location) return 'Location is required.';
   if (!referral) return 'Referral source is required.';
   if (whyNocturne.length < 50) return 'Please tell us a little more about why you want to attend.';
@@ -82,6 +92,139 @@ function validate(fields) {
   if (clean(fields.privacy_ack) !== 'yes') return 'The Privacy Notice acknowledgement is required.';
 
   return null;
+}
+
+function spamScore(fields) {
+  const text = [
+    fields.full_name,
+    fields.preferred_name,
+    fields.location,
+    fields.instagram,
+    fields.referral,
+    fields.community,
+    fields.why_nocturne,
+    fields.group_names
+  ].map((value) => clean(value, 5000).toLowerCase()).join('\n');
+
+  let score = 0;
+  const urls = text.match(/(?:https?:\/\/|www\.)\S+/g) || [];
+  if (urls.length >= 2) score += 3;
+  else if (urls.length === 1) score += 1;
+
+  const strongSignals = [
+    't.me/',
+    'telegram',
+    'wa.me/',
+    'whatsapp',
+    '50,000 messages',
+    '50000 messages',
+    'million messages',
+    'contact form messages',
+    'send messages lawfully',
+    'bulk messages',
+    'our service is free'
+  ];
+  for (const signal of strongSignals) {
+    if (text.includes(signal)) score += 2;
+  }
+
+  if (/\$\s?\d{2,4}/.test(text) && /(message|marketing|service|telegram|whatsapp)/.test(text)) score += 2;
+  if ((text.match(/https?:\/\//g) || []).length >= 3) score += 2;
+
+  return score;
+}
+
+function clientIp(req) {
+  const direct = clean(req.headers.get('x-nf-client-connection-ip'), 80);
+  if (direct) return direct;
+  return clean((req.headers.get('x-forwarded-for') || '').split(',')[0], 80) || 'unknown';
+}
+
+function hashKey(value) {
+  return createHash('sha256').update(String(value)).digest('hex');
+}
+
+async function enforceRateLimit(req, fields) {
+  const store = getStore({ name: RATE_STORE, consistency: 'strong' });
+  const now = Date.now();
+  const ipHash = hashKey(clientIp(req));
+  const emailHash = hashKey(clean(fields.email, MAX.email).toLowerCase());
+  const ipKey = `ip-${ipHash}`;
+  const emailKey = `email-${emailHash}`;
+
+  const [ipState, emailState] = await Promise.all([
+    store.get(ipKey, { type: 'json', consistency: 'strong' }).catch(() => null),
+    store.get(emailKey, { type: 'json', consistency: 'strong' }).catch(() => null)
+  ]);
+
+  const currentIp = ipState && Number(ipState.windowStart) > now - RATE_WINDOW_MS
+    ? ipState
+    : { windowStart: now, count: 0 };
+
+  if (Number(currentIp.count) >= RATE_MAX) {
+    const retryAfter = Math.max(60, Math.ceil((Number(currentIp.windowStart) + RATE_WINDOW_MS - now) / 1000));
+    return { blocked: true, status: 429, error: 'Too many invitation requests were submitted from this connection. Please try again later.', retryAfter };
+  }
+
+  if (emailState && Number(emailState.lastSubmittedAt) > now - DUPLICATE_WINDOW_MS) {
+    return { blocked: true, status: 429, error: 'An invitation request for this email was submitted recently. Please wait before trying again.', retryAfter: 1800 };
+  }
+
+  await Promise.all([
+    store.setJSON(ipKey, { windowStart: Number(currentIp.windowStart), count: Number(currentIp.count) + 1, updatedAt: now }),
+    store.setJSON(emailKey, { lastSubmittedAt: now })
+  ]);
+
+  return { blocked: false };
+}
+
+async function verifyTurnstile(req, fields) {
+  const secret = clean(process.env.NOCTURNE_TURNSTILE_SECRET_KEY, 500);
+  const siteKey = clean(process.env.NOCTURNE_TURNSTILE_SITE_KEY, 500);
+  if (!secret && !siteKey) return { ok: true, configured: false };
+  if (!secret || !siteKey) return { ok: false, configured: true, error: 'Bot protection is temporarily unavailable. Please contact support.' };
+
+  const token = clean(fields['cf-turnstile-response'], 4096);
+  if (!token) return { ok: false, configured: true, error: 'Please complete the security check and try again.' };
+
+  const body = new URLSearchParams({
+    secret,
+    response: token,
+    remoteip: clientIp(req)
+  });
+
+  let response;
+  try {
+    response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    });
+  } catch {
+    return { ok: false, configured: true, error: 'The security check could not be verified. Please try again.' };
+  }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.success !== true) {
+    console.warn('NOCTURNE Turnstile verification failed:', result['error-codes'] || response.status);
+    return { ok: false, configured: true, error: 'The security check could not be verified. Please try again.' };
+  }
+
+  if (result.action && result.action !== 'invite_request') {
+    return { ok: false, configured: true, error: 'The security check was invalid. Please refresh and try again.' };
+  }
+
+  const expectedHosts = new Set(['nocturnefestival.com', 'www.nocturnefestival.com']);
+  try {
+    for (const value of [process.env.NOCTURNE_SITE_URL, process.env.URL, process.env.DEPLOY_PRIME_URL]) {
+      if (value) expectedHosts.add(new URL(value).hostname);
+    }
+  } catch {}
+  if (result.hostname && !expectedHosts.has(result.hostname)) {
+    return { ok: false, configured: true, error: 'The security check came from an unexpected host.' };
+  }
+
+  return { ok: true, configured: true };
 }
 
 async function sendApplicationNotification(application) {
@@ -133,9 +276,7 @@ async function sendApplicationNotification(application) {
 }
 
 export default async (req) => {
-  if (req.method !== 'POST') {
-    return json({ error: 'Method not allowed.' }, 405);
-  }
+  if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
 
   let fields;
   try {
@@ -152,6 +293,26 @@ export default async (req) => {
 
   const error = validate(fields);
   if (error) return json({ error }, 400);
+
+  if (spamScore(fields) >= 4) {
+    console.warn('NOCTURNE application rejected by spam scoring.');
+    return req.headers.get('x-nocturne-ajax') === '1'
+      ? json({ ok: true }, 201)
+      : new Response(null, { status: 303, headers: { Location: '/application-received.html' } });
+  }
+
+  const turnstile = await verifyTurnstile(req, fields);
+  if (!turnstile.ok) return json({ error: turnstile.error }, 403);
+
+  try {
+    const rate = await enforceRateLimit(req, fields);
+    if (rate.blocked) {
+      return json({ error: rate.error }, rate.status, { 'Retry-After': String(rate.retryAfter) });
+    }
+  } catch (error) {
+    console.error('NOCTURNE application rate-limit check failed:', error);
+    return json({ error: 'Your request could not be verified. Please try again.' }, 503);
+  }
 
   const id = randomUUID();
   const createdAt = new Date().toISOString();
@@ -190,9 +351,7 @@ export default async (req) => {
     console.error('NOCTURNE application notification email failed:', error);
   }
 
-  if (req.headers.get('x-nocturne-ajax') === '1') {
-    return json({ ok: true, id }, 201);
-  }
+  if (req.headers.get('x-nocturne-ajax') === '1') return json({ ok: true, id }, 201);
 
   return new Response(null, {
     status: 303,
