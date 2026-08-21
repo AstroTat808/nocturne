@@ -1,6 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { createHash } from 'node:crypto';
-import { accessSecret, accessTtlSeconds, makeAccessCookie, makeAccessToken } from './_ticket-auth.mjs';
+import { accessSecret, accessTtlSeconds, makeAccessCookie, makeAccessToken, makeReentryToken, reentryTtlSeconds } from './_ticket-auth.mjs';
 
 const STORE_NAME = 'nocturne-invites';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -138,13 +138,20 @@ async function sendRedemptionConfirmation(req, invite, usedAt, ticketUrl) {
     const displayName = application.preferredName || application.fullName || 'Guest';
     const safeName = escapeHtml(displayName);
     const siteUrl = (process.env.NOCTURNE_SITE_URL || new URL(req.url).origin).replace(/\/$/, '');
-    const internalCheckout = ticketUrl === '/ticket-access' && builtInCheckoutConfigured();
+    const internalCheckout = ticketUrl === '/ticket-access';
     const externalCheckout = /^https:\/\//i.test(ticketUrl);
-    const statusCopy = internalCheckout
-      ? 'Your private NOCTURNE ticket checkout is now available. Return to the private access page in the browser where you redeemed your invitation to purchase your ticket.'
-      : externalCheckout
-        ? 'Your invitation has been successfully redeemed and your private ticket access is ready.'
-        : 'Private ticket checkout is not live yet, so there is nothing else you need to do right now. Approved guests will receive the next instructions when checkout opens.';
+    const reentryToken = internalCheckout ? makeReentryToken(submissionId) : null;
+    const reentryUrl = reentryToken ? `${siteUrl}/ticket-access/reenter?token=${encodeURIComponent(reentryToken)}` : '';
+    const reentryHours = Math.round(reentryTtlSeconds() / 3600);
+    const reentryWindow = reentryHours >= 48 && reentryHours % 24 === 0 ? `${reentryHours / 24} days` : `${reentryHours} hours`;
+    const checkoutLive = internalCheckout && builtInCheckoutConfigured();
+    const statusCopy = checkoutLive
+      ? 'Your private NOCTURNE ticket checkout is now available. Use the secure button below whenever you are ready to purchase your ticket.'
+      : internalCheckout
+        ? 'Your invitation has been successfully redeemed. Your private NOCTURNE access is active, and you can return through the secure button below.'
+        : externalCheckout
+          ? 'Your invitation has been successfully redeemed and your private ticket access is ready.'
+          : 'Your invitation has been successfully redeemed. Approved guests will receive the next instructions when ticket access opens.';
 
     const text = [
       `${displayName},`,
@@ -153,8 +160,11 @@ async function sendRedemptionConfirmation(req, invite, usedAt, ticketUrl) {
       '',
       'Your NOCTURNE invitation was successfully redeemed.',
       statusCopy,
+      reentryUrl ? '' : null,
+      reentryUrl ? `Open private ticket access: ${reentryUrl}` : null,
+      reentryUrl ? `This secure re-entry link is valid for ${reentryWindow}.` : null,
       '',
-      'Keep an eye on this email address for future private access instructions.',
+      'Keep this email private. The access button is tied to your approved application.',
       '',
       `Need help with the website? ${HELP_EMAIL}`,
       '',
@@ -162,9 +172,13 @@ async function sendRedemptionConfirmation(req, invite, usedAt, ticketUrl) {
       '',
       'NOCTURNE Festival',
       'Presented by Wild Ones · Hawai‘i'
-    ].join('\n');
+    ].filter((line) => line !== null).join('\n');
 
-    const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Access Confirmed</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:42px;line-height:1.04;color:#fff3df;margin:16px 0 22px">Your access<br>is confirmed.</h1><p style="color:#c8baa4;line-height:1.7">${safeName}, your NOCTURNE invitation was successfully redeemed.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.7">${escapeHtml(statusCopy)}</div><p style="color:#9d907f;line-height:1.7">Keep an eye on this email address for future private access instructions.</p><p style="text-align:center;margin:30px 0 10px"><a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:14px 20px;border:1px solid rgba(216,154,43,.6);color:#ffca61;text-decoration:none;font-size:11px;letter-spacing:2px;text-transform:uppercase">Return to NOCTURNE</a></p><p style="color:#807564;font-size:12px">Need help with the website? <a href="mailto:${escapeHtml(HELP_EMAIL)}" style="color:#ffca61">${escapeHtml(HELP_EMAIL)}</a></p><div style="margin-top:34px;padding-top:20px;border-top:1px solid rgba(216,154,43,.18);color:#74695b;font-size:11px;letter-spacing:1px;text-transform:uppercase">NOCTURNE Festival · Presented by Wild Ones · Hawai‘i</div></div></div></body></html>`;
+    const primaryButton = reentryUrl
+      ? `<p style="text-align:center;margin:30px 0 10px"><a href="${escapeHtml(reentryUrl)}" style="display:inline-block;padding:15px 22px;background:#d89a2b;color:#0b0803;text-decoration:none;font-size:11px;letter-spacing:2px;text-transform:uppercase">Open Private Ticket Access</a></p><p style="color:#807564;font-size:12px;line-height:1.7;text-align:center">This secure re-entry link is valid for ${escapeHtml(reentryWindow)} and restores private access on the device where you open it.</p>`
+      : `<p style="text-align:center;margin:30px 0 10px"><a href="${escapeHtml(externalCheckout ? ticketUrl : siteUrl)}" style="display:inline-block;padding:14px 20px;border:1px solid rgba(216,154,43,.6);color:#ffca61;text-decoration:none;font-size:11px;letter-spacing:2px;text-transform:uppercase">${externalCheckout ? 'Open Private Ticket Access' : 'Return to NOCTURNE'}</a></p>`;
+
+    const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Access Confirmed</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:42px;line-height:1.04;color:#fff3df;margin:16px 0 22px">Your access<br>is confirmed.</h1><p style="color:#c8baa4;line-height:1.7">${safeName}, your NOCTURNE invitation was successfully redeemed.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.7">${escapeHtml(statusCopy)}</div>${primaryButton}<p style="color:#9d907f;line-height:1.7">Keep this email private. The access button is tied to your approved application.</p><p style="color:#807564;font-size:12px">Need help with the website? <a href="mailto:${escapeHtml(HELP_EMAIL)}" style="color:#ffca61">${escapeHtml(HELP_EMAIL)}</a></p><div style="margin-top:34px;padding-top:20px;border-top:1px solid rgba(216,154,43,.18);color:#74695b;font-size:11px;letter-spacing:1px;text-transform:uppercase">NOCTURNE Festival · Presented by Wild Ones · Hawai‘i</div></div></div></body></html>`;
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -207,6 +221,8 @@ async function sendRedemptionConfirmation(req, invite, usedAt, ticketUrl) {
       redemptionConfirmationSentAt: sentAt,
       redemptionConfirmationMessageId: responseData.id || null,
       redemptionConfirmationError: null,
+      ticketReentryLinkIssuedAt: reentryUrl ? sentAt : null,
+      ticketReentryLinkExpiresAt: reentryUrl ? new Date(Date.now() + reentryTtlSeconds() * 1000).toISOString() : null,
       updatedAt: sentAt
     });
 
