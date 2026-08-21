@@ -114,8 +114,8 @@ async function setupTurnstile(form, status) {
   field.className = 'turnstile-field';
   field.setAttribute('aria-label', 'Security verification');
   Object.assign(field.style, {
-    margin: '0 0 1.25rem',
-    minHeight: '65px'
+    margin: '0 0 .6rem',
+    minHeight: '0'
   });
 
   const formActions = form.querySelector('.form-actions');
