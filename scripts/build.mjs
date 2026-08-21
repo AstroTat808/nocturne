@@ -14,14 +14,20 @@ const heroParts = [
   'site/assets/data/hero-woman-teal-02.b64',
   'site/assets/data/hero-woman-teal-03.b64',
   'site/assets/data/hero-woman-teal-04.b64',
-  'site/assets/data/hero-woman-teal-05.b64',
+  'site/assets/data/hero-woman-teal-05a.b64',
+  'site/assets/data/hero-woman-teal-05b.b64',
   'site/assets/data/hero-woman-teal-06.b64'
 ];
 const heroBase64 = (await Promise.all(heroParts.map((file) => readFile(file, 'utf8'))))
   .map((part) => part.trim())
   .join('');
+if (heroBase64.length !== 90368) {
+  throw new Error(`NOCTURNE hero image source length was ${heroBase64.length}; expected 90368.`);
+}
 const heroImage = Buffer.from(heroBase64, 'base64');
-if (heroImage.length < 50000) throw new Error('NOCTURNE hero image reconstruction failed.');
+if (heroImage.length !== 67774) {
+  throw new Error(`NOCTURNE hero image decoded to ${heroImage.length} bytes; expected 67774.`);
+}
 await writeFile('site/assets/images/hero-woman-teal.webp', heroImage);
 
 // Swap only the homepage portrait. All copy, logo artwork, layout, effects,
