@@ -1,18 +1,32 @@
 const form = document.querySelector('#invite-form');
 const result = document.querySelector('#invite-result');
 const link = document.querySelector('#ticket-link');
+const codeInput = form?.querySelector('[name="code"]');
 
-function showQueryError() {
-  const message = new URLSearchParams(window.location.search).get('error');
-  if (message && result) result.textContent = message;
+function normalizeCode(value = '') {
+  return String(value).trim().toUpperCase().replace(/\s+/g, '');
 }
 
-showQueryError();
+function showQueryState() {
+  const params = new URLSearchParams(window.location.search);
+  const message = params.get('error');
+  const code = normalizeCode(params.get('code') || '');
+
+  if (message && result) result.textContent = message;
+  if (codeInput && /^NOC-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) {
+    codeInput.value = code;
+    if (result && !message) result.textContent = 'Your invitation code is ready. Verify it below to continue.';
+    codeInput.focus();
+  }
+}
+
+showQueryState();
 
 form?.addEventListener('submit', async (event) => {
   event.preventDefault();
   const submit = form.querySelector('button[type="submit"]');
-  const code = new FormData(form).get('code');
+  const code = normalizeCode(new FormData(form).get('code'));
+  if (codeInput) codeInput.value = code;
   result.textContent = 'Verifying invitation…';
   link.classList.remove('visible');
   link.removeAttribute('href');
