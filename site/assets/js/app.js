@@ -65,10 +65,30 @@ const observer = new IntersectionObserver((entries) => {
 }, { threshold: .12 });
 document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
 
+function formatPhoneNumber(value = '') {
+  let digits = String(value).replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+  digits = digits.slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 const form = document.querySelector('#application-form');
 if (form) {
   const status = form.querySelector('.form-status');
   const submitButton = form.querySelector('button[type="submit"]');
+  const phone = form.querySelector('#phone');
+
+  if (phone) {
+    phone.addEventListener('input', () => {
+      const formatted = formatPhoneNumber(phone.value);
+      if (phone.value !== formatted) phone.value = formatted;
+    });
+    phone.addEventListener('blur', () => {
+      phone.value = formatPhoneNumber(phone.value);
+    });
+  }
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
