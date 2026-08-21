@@ -1,15 +1,25 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export const ACCESS_COOKIE = 'nocturne_ticket_access';
+const ACCESS_SCOPE = 'ticket-access';
+const REENTRY_SCOPE = 'ticket-reentry';
 
 export function accessSecret() {
   return process.env.NOCTURNE_TICKET_ACCESS_SECRET || process.env.NOCTURNE_ADMIN_SESSION_SECRET || process.env.NOCTURNE_ADMIN_KEY || '';
 }
 
+function clampedHours(value, fallback = 168) {
+  const configured = Number(value);
+  const hours = Number.isFinite(configured) ? Math.min(Math.max(configured, 1), 720) : fallback;
+  return hours;
+}
+
 export function accessTtlSeconds() {
-  const configuredHours = Number(process.env.NOCTURNE_TICKET_ACCESS_TTL_HOURS || 168);
-  const hours = Number.isFinite(configuredHours) ? Math.min(Math.max(configuredHours, 1), 720) : 168;
-  return Math.floor(hours * 60 * 60);
+  return Math.floor(clampedHours(process.env.NOCTURNE_TICKET_ACCESS_TTL_HOURS || 168) * 60 * 60);
+}
+
+export function reentryTtlSeconds() {
+  return Math.floor(clampedHours(process.env.NOCTURNE_TICKET_REENTRY_TTL_HOURS || process.env.NOCTURNE_TICKET_ACCESS_TTL_HOURS || 168) * 60 * 60);
 }
 
 function sign(payload) {
@@ -23,14 +33,14 @@ function constantTimeEqual(a = '', b = '') {
   return timingSafeEqual(left, right);
 }
 
-export function makeAccessToken(submissionId, ttlSeconds = accessTtlSeconds()) {
+function makeScopedToken(scope, submissionId, ttlSeconds) {
   if (!accessSecret()) return null;
   const id = String(submissionId || '').trim();
   if (!/^[A-Za-z0-9_-]{6,128}$/.test(id)) return null;
 
   const now = Math.floor(Date.now() / 1000);
   const payload = Buffer.from(JSON.stringify({
-    scope: 'ticket-access',
+    scope,
     submissionId: id,
     iat: now,
     exp: now + ttlSeconds,
@@ -40,20 +50,36 @@ export function makeAccessToken(submissionId, ttlSeconds = accessTtlSeconds()) {
   return `${payload}.${sign(payload)}`;
 }
 
-export function verifyAccessToken(token) {
+function verifyScopedToken(token, scope) {
   if (!accessSecret() || !token || !String(token).includes('.')) return null;
   const [payload, signature] = String(token).split('.', 2);
   if (!constantTimeEqual(signature, sign(payload))) return null;
 
   try {
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (data.scope !== 'ticket-access') return null;
+    if (data.scope !== scope) return null;
     if (!/^[A-Za-z0-9_-]{6,128}$/.test(String(data.submissionId || ''))) return null;
     if (Number(data.exp) <= Math.floor(Date.now() / 1000)) return null;
     return data;
   } catch {
     return null;
   }
+}
+
+export function makeAccessToken(submissionId, ttlSeconds = accessTtlSeconds()) {
+  return makeScopedToken(ACCESS_SCOPE, submissionId, ttlSeconds);
+}
+
+export function verifyAccessToken(token) {
+  return verifyScopedToken(token, ACCESS_SCOPE);
+}
+
+export function makeReentryToken(submissionId, ttlSeconds = reentryTtlSeconds()) {
+  return makeScopedToken(REENTRY_SCOPE, submissionId, ttlSeconds);
+}
+
+export function verifyReentryToken(token) {
+  return verifyScopedToken(token, REENTRY_SCOPE);
 }
 
 export function parseCookies(req) {
