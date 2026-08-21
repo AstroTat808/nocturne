@@ -2,6 +2,8 @@ import { getStore } from '@netlify/blobs';
 import { randomUUID } from 'node:crypto';
 
 const APPLICATION_STORE = 'nocturne-applications';
+const APPLICATION_NOTIFY_TO = process.env.NOCTURNE_APPLICATION_NOTIFY_TO || 'invites@nocturnefestival.com';
+const HELP_EMAIL = process.env.NOCTURNE_HELP_EMAIL || 'help@nocturnefestival.com';
 const MAX = {
   full_name: 120,
   preferred_name: 120,
@@ -17,6 +19,22 @@ const MAX = {
 
 function clean(value, max = 5000) {
   return String(value ?? '').trim().slice(0, max);
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function formatPhone(value = '') {
+  let digits = String(value).replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+  if (digits.length !== 10) return clean(value, MAX.phone);
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 function json(data, status = 200) {
@@ -66,6 +84,54 @@ function validate(fields) {
   return null;
 }
 
+async function sendApplicationNotification(application) {
+  if (!process.env.RESEND_API_KEY || !process.env.NOCTURNE_EMAIL_FROM) {
+    return { sent: false, reason: 'Email not configured.' };
+  }
+
+  const site = (process.env.NOCTURNE_SITE_URL || 'https://nocturnefestival.com').replace(/\/$/, '');
+  const adminUrl = `${site}/admin`;
+  const subject = `New NOCTURNE invite request — ${application.fullName}`;
+  const text = [
+    'A new NOCTURNE invitation request was submitted.',
+    '',
+    `Name: ${application.fullName}`,
+    application.preferredName ? `Preferred name: ${application.preferredName}` : '',
+    `Email: ${application.email}`,
+    `Phone: ${application.phone}`,
+    `Location: ${application.location}`,
+    application.instagram ? `Instagram: ${application.instagram}` : '',
+    `Referral: ${application.referral}`,
+    '',
+    `Why NOCTURNE: ${application.whyNocturne}`,
+    '',
+    `Review in admin: ${adminUrl}`,
+    '',
+    `Site support: ${HELP_EMAIL}`
+  ].filter(Boolean).join('\n');
+
+  const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:680px;margin:0 auto;padding:40px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:34px 28px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · New Invitation Request</div><h1 style="font-family:Georgia,serif;font-weight:400;color:#fff3df">${escapeHtml(application.fullName)}</h1><div style="line-height:1.8;color:#c8baa4"><strong>Email:</strong> ${escapeHtml(application.email)}<br><strong>Phone:</strong> ${escapeHtml(application.phone)}<br><strong>Location:</strong> ${escapeHtml(application.location)}${application.instagram ? `<br><strong>Instagram:</strong> ${escapeHtml(application.instagram)}` : ''}<br><strong>Referral:</strong> ${escapeHtml(application.referral)}</div><div style="margin:24px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.7"><strong>Why NOCTURNE</strong><br>${escapeHtml(application.whyNocturne)}</div><p style="text-align:center;margin:28px 0"><a href="${escapeHtml(adminUrl)}" style="display:inline-block;padding:14px 20px;background:#d89a2b;color:#0b0803;text-decoration:none;font-size:12px;letter-spacing:2px;text-transform:uppercase">Open Admin Review</a></p><p style="color:#807564;font-size:12px">Site support: <a href="mailto:${escapeHtml(HELP_EMAIL)}" style="color:#ffca61">${escapeHtml(HELP_EMAIL)}</a></p></div></div></body></html>`;
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: process.env.NOCTURNE_EMAIL_FROM,
+      to: [APPLICATION_NOTIFY_TO],
+      subject,
+      html,
+      text
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || `Resend returned ${response.status}.`);
+  return { sent: true, messageId: data.id || null };
+}
+
 export default async (req) => {
   if (req.method !== 'POST') {
     return json({ error: 'Method not allowed.' }, 405);
@@ -78,7 +144,6 @@ export default async (req) => {
     return json({ error: 'Invalid application request.' }, 400);
   }
 
-  // Honeypot: make automated submissions look successful without storing them.
   if (clean(fields['bot-field'])) {
     return req.headers.get('x-nocturne-ajax') === '1'
       ? json({ ok: true }, 201)
@@ -96,7 +161,7 @@ export default async (req) => {
     fullName: clean(fields.full_name, MAX.full_name),
     preferredName: clean(fields.preferred_name, MAX.preferred_name),
     email: clean(fields.email, MAX.email).toLowerCase(),
-    phone: clean(fields.phone, MAX.phone),
+    phone: formatPhone(fields.phone),
     location: clean(fields.location, MAX.location),
     instagram: clean(fields.instagram, MAX.instagram),
     referral: clean(fields.referral, MAX.referral),
@@ -117,6 +182,12 @@ export default async (req) => {
   } catch (error) {
     console.error('NOCTURNE application storage failed:', error);
     return json({ error: 'Your application could not be stored. Please try again.' }, 500);
+  }
+
+  try {
+    await sendApplicationNotification(application);
+  } catch (error) {
+    console.error('NOCTURNE application notification email failed:', error);
   }
 
   if (req.headers.get('x-nocturne-ajax') === '1') {
