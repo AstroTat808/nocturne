@@ -45,6 +45,7 @@ if (heroCss.includes(originalHeroUrl)) {
 
 const required = [
   'site/index.html',
+  'site/festival.html',
   'site/invite.html',
   'site/admin.html',
   'site/admin-launch.html',
