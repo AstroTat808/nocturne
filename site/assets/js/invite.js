@@ -15,8 +15,16 @@ function showQueryState() {
   if (message && result) result.textContent = message;
   if (codeInput && /^NOC-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) {
     codeInput.value = code;
+    codeInput.setAttribute('value', code);
+    codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+    codeInput.dispatchEvent(new Event('change', { bubbles: true }));
     if (result && !message) result.textContent = 'Your invitation code is ready. Verify it below to continue.';
     codeInput.focus();
+
+    // Remove the single-use code from the visible URL/history after it has been loaded into the form.
+    params.delete('code');
+    const query = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
   }
 }
 
