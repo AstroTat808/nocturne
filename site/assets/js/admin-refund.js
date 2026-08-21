@@ -51,6 +51,12 @@
       return;
     }
 
+    if (/^NOC-TKT-COMP-/.test(ticketId)) {
+      button.remove();
+      setPanelStatus(panel, 'Complimentary tickets have no Stripe payment to refund.', false);
+      return;
+    }
+
     const firstConfirm = window.confirm(
       `Refund and cancel ${guestName}'s ticket?\n\nTicket: ${ticketId}\nAmount: ${amount || 'Full payment'}\n\nThis submits a full Stripe refund and permanently invalidates the digital ticket.`
     );
