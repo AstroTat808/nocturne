@@ -1,10 +1,28 @@
-import { access, copyFile, mkdir } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 
 await mkdir('site/assets/vendor', { recursive: true });
 await copyFile(
   'node_modules/html5-qrcode/html5-qrcode.min.js',
   'site/assets/vendor/html5-qrcode.min.js'
 );
+
+// The GitHub connector used to maintain this site writes text files, so the
+// approved homepage hero image is stored as small base64 source chunks. Rebuild
+// the WebP at deploy time before Netlify publishes the site.
+const heroParts = [
+  'site/assets/data/hero-woman-teal-01.b64',
+  'site/assets/data/hero-woman-teal-02.b64',
+  'site/assets/data/hero-woman-teal-03.b64',
+  'site/assets/data/hero-woman-teal-04.b64',
+  'site/assets/data/hero-woman-teal-05.b64',
+  'site/assets/data/hero-woman-teal-06.b64'
+];
+const heroBase64 = (await Promise.all(heroParts.map((file) => readFile(file, 'utf8'))))
+  .map((part) => part.trim())
+  .join('');
+const heroImage = Buffer.from(heroBase64, 'base64');
+if (heroImage.length < 50000) throw new Error('NOCTURNE hero image reconstruction failed.');
+await writeFile('site/assets/images/hero-woman-teal.webp', heroImage);
 
 const required = [
   'site/index.html',
@@ -46,6 +64,7 @@ const required = [
   'site/assets/images/favicon.png',
   'site/assets/images/nocturne-logo.webp',
   'site/assets/images/hero-woman.webp',
+  'site/assets/images/hero-woman-teal.webp',
   'netlify/functions/apply.mjs',
   'netlify/functions/redeem-invite.mjs',
   'netlify/functions/invite-view.mjs',
