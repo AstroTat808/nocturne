@@ -26,6 +26,7 @@ const required = [
   'site/assets/css/icons.css',
   'site/assets/css/admin.css',
   'site/assets/css/admin-invites.css',
+  'site/assets/css/admin-tickets.css',
   'site/assets/css/success.css',
   'site/assets/css/private-access.css',
   'site/assets/css/check-in.css',
