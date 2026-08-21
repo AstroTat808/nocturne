@@ -91,6 +91,23 @@ function clearSessionCookie() {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
 }
 
+function allowedPostOrigin(req) {
+  const origin = req.headers.get('origin');
+  if (!origin) return true;
+
+  const allowed = new Set();
+  try { allowed.add(new URL(req.url).origin); } catch {}
+
+  for (const value of [process.env.NOCTURNE_SITE_URL, process.env.URL, process.env.DEPLOY_PRIME_URL]) {
+    if (!value) continue;
+    try { allowed.add(new URL(value).origin); } catch {}
+  }
+
+  allowed.add('https://nocturnefestival.com');
+  allowed.add('https://www.nocturnefestival.com');
+  return allowed.has(origin);
+}
+
 function normalizeCode(code) {
   return String(code).trim().toUpperCase().replace(/\s+/g, '');
 }
@@ -616,8 +633,7 @@ export default async (req) => {
   const action = url.searchParams.get('action') || '';
 
   if (req.method === 'POST') {
-    const origin = req.headers.get('origin');
-    if (origin && origin !== url.origin) return json({ error: 'Origin not allowed.' }, 403);
+    if (!allowedPostOrigin(req)) return json({ error: 'Origin not allowed.' }, 403);
 
     const body = await readBody(req);
     if (!body) return json({ error: 'Invalid JSON body.' }, 400);
