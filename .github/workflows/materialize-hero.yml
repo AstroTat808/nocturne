@@ -1,0 +1,49 @@
+name: Materialize teal hero image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/materialize-hero.yml'
+      - 'site/assets/data/hero-woman-teal-*.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rebuild WebP
+        shell: bash
+        run: |
+          mkdir -p site/assets/images
+          cat \
+            site/assets/data/hero-woman-teal-01.b64 \
+            site/assets/data/hero-woman-teal-02.b64 \
+            site/assets/data/hero-woman-teal-03.b64 \
+            site/assets/data/hero-woman-teal-04.b64 \
+            site/assets/data/hero-woman-teal-05a.b64 \
+            site/assets/data/hero-woman-teal-05b.b64 \
+            site/assets/data/hero-woman-teal-06.b64 \
+            | tr -d '\n\r ' \
+            | base64 --decode > site/assets/images/hero-woman-teal.webp
+          test "$(wc -c < site/assets/images/hero-woman-teal.webp | tr -d ' ')" = "67774"
+
+      - name: Commit image asset
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/assets/images/hero-woman-teal.webp
+          if git diff --cached --quiet; then
+            echo "Hero image already materialized."
+            exit 0
+          fi
+          git commit -m "Add teal homepage hero image"
+          git push
