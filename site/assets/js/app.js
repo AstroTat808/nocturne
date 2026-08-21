@@ -74,11 +74,85 @@ function formatPhoneNumber(value = '') {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+function loadTurnstileScript() {
+  if (window.turnstile) return Promise.resolve();
+  const existing = document.querySelector('script[data-nocturne-turnstile]');
+  if (existing) {
+    return new Promise((resolve, reject) => {
+      existing.addEventListener('load', resolve, { once: true });
+      existing.addEventListener('error', reject, { once: true });
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.dataset.nocturneTurnstile = 'true';
+    script.addEventListener('load', resolve, { once: true });
+    script.addEventListener('error', reject, { once: true });
+    document.head.appendChild(script);
+  });
+}
+
+async function setupTurnstile(form, status) {
+  let config;
+  try {
+    const response = await fetch('/api/apply-security', { headers: { Accept: 'application/json' } });
+    config = await response.json();
+  } catch (error) {
+    console.error('NOCTURNE security configuration failed:', error);
+    return { enabled: false, widgetId: null };
+  }
+
+  if (!config?.turnstile?.enabled || !config.turnstile.siteKey) {
+    return { enabled: false, widgetId: null };
+  }
+
+  const field = document.createElement('div');
+  field.className = 'turnstile-field';
+  field.setAttribute('aria-label', 'Security verification');
+  Object.assign(field.style, {
+    margin: '0 0 1.25rem',
+    minHeight: '65px'
+  });
+
+  const formActions = form.querySelector('.form-actions');
+  formActions?.parentNode?.insertBefore(field, formActions);
+
+  try {
+    await loadTurnstileScript();
+    const widgetId = window.turnstile.render(field, {
+      sitekey: config.turnstile.siteKey,
+      action: config.turnstile.action || 'invite_request',
+      theme: 'dark',
+      size: 'flexible',
+      appearance: 'interaction-only',
+      callback: () => {
+        if (status?.textContent === 'Please complete the security check and try again.') status.textContent = '';
+      },
+      'expired-callback': () => {
+        if (status) status.textContent = 'Security check expired. Please verify again.';
+      },
+      'error-callback': () => {
+        if (status) status.textContent = 'Security verification could not load. Please refresh and try again.';
+      }
+    });
+    return { enabled: true, widgetId };
+  } catch (error) {
+    console.error('NOCTURNE Turnstile failed to initialize:', error);
+    if (status) status.textContent = 'Security verification could not load. Please refresh and try again.';
+    return { enabled: true, widgetId: null };
+  }
+}
+
 const form = document.querySelector('#application-form');
 if (form) {
   const status = form.querySelector('.form-status');
   const submitButton = form.querySelector('button[type="submit"]');
   const phone = form.querySelector('#phone');
+  const turnstileStatePromise = setupTurnstile(form, status);
 
   if (phone) {
     phone.addEventListener('input', () => {
@@ -101,6 +175,19 @@ if (form) {
     }
 
     if (!form.reportValidity()) return;
+
+    const turnstileState = await turnstileStatePromise;
+    if (turnstileState.enabled) {
+      const token = form.querySelector('[name="cf-turnstile-response"]')?.value || '';
+      if (!turnstileState.widgetId && !token) {
+        status.textContent = 'Security verification could not load. Please refresh and try again.';
+        return;
+      }
+      if (!token) {
+        status.textContent = 'Please complete the security check and try again.';
+        return;
+      }
+    }
 
     status.textContent = 'Submitting your request…';
     if (submitButton) submitButton.disabled = true;
@@ -126,6 +213,10 @@ if (form) {
       console.error('NOCTURNE application submission failed:', error);
       status.textContent = error.message || 'Your request could not be submitted. Please try again.';
       if (submitButton) submitButton.disabled = false;
+      const turnstileState = await turnstileStatePromise;
+      if (turnstileState.enabled && turnstileState.widgetId && window.turnstile) {
+        try { window.turnstile.reset(turnstileState.widgetId); } catch {}
+      }
     }
   });
 }
