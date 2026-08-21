@@ -49,6 +49,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/comp-ticket"
+  to = "/.netlify/functions/admin-comp-ticket"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/ticket-access/checkout"
   to = "/.netlify/functions/create-checkout"
   status = 200
