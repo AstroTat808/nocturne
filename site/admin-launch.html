@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#030303">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Launch Operations | NOCTURNE</title>
+  <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+  <link rel="stylesheet" href="/assets/css/admin-tickets.css">
+  <script src="/assets/js/admin-launch.js?v=20260821a" defer></script>
+</head>
+<body class="admin-body">
+  <header class="admin-topbar">
+    <a class="admin-brand" href="/admin" aria-label="Return to NOCTURNE admin">
+      <img src="/assets/images/favicon.png" alt="" width="52" height="52">
+      <span><strong>NOCTURNE</strong><small>Launch operations</small></span>
+    </a>
+    <div class="admin-top-actions"><a href="/admin">← Operations desk</a></div>
+  </header>
+
+  <main class="admin-shell">
+    <section id="admin-launch-tools" class="admin-dashboard">
+      <div class="admin-heading-row">
+        <div>
+          <p class="admin-kicker">Go-live controls</p>
+          <h1>Launch readiness.</h1>
+          <p class="admin-muted">Verify the deployed Stripe mode and clear pre-launch invitation records without deleting applications or ticket records.</p>
+        </div>
+      </div>
+
+      <section class="admin-ticket-overview" aria-labelledby="stripe-launch-title">
+        <div class="admin-ticket-overview-head">
+          <div><p class="admin-kicker">Payments</p><h2 id="stripe-launch-title">Stripe deployment.</h2></div>
+          <button id="launch-refresh-stripe" class="admin-outline-button" type="button">Check Stripe</button>
+        </div>
+        <div class="admin-ticket-stats">
+          <div class="admin-ticket-stat"><span id="launch-stripe-mode">—</span><small>Mode</small><em>Must show LIVE</em></div>
+          <div class="admin-ticket-stat"><span id="launch-stripe-webhook">—</span><small>Webhook</small><em>Live destination + events</em></div>
+          <div class="admin-ticket-stat"><span id="launch-stripe-price">—</span><small>Ticket price</small><em>Configured checkout amount</em></div>
+          <div class="admin-ticket-stat"><span id="launch-stripe-ready">—</span><small>Readiness</small><em>Final real payment still required</em></div>
+        </div>
+      </section>
+
+      <section class="admin-review-panel" style="margin-top:24px">
+        <p class="admin-kicker">Pre-launch cleanup</p>
+        <h2>Invitation records.</h2>
+        <p class="admin-muted">This deletes all existing invitation-code blobs and removes invitation lifecycle fields from application review records. Applications, applicant contact information, ticket orders, digital tickets, and check-in records are preserved.</p>
+        <div class="admin-review-actions">
+          <button id="launch-clear-invites" class="admin-danger-button" type="button">Clear all invitation entries</button>
+        </div>
+      </section>
+
+      <p id="launch-status" class="admin-status" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+</body>
+</html>
