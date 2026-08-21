@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/admin.css">
   <link rel="stylesheet" href="/assets/css/admin-tickets.css">
-  <script src="/assets/js/admin-launch.js?v=20260821a" defer></script>
+  <script src="/assets/js/admin-launch.js?v=20260821b" defer></script>
 </head>
 <body class="admin-body">
   <header class="admin-topbar">
@@ -27,7 +27,7 @@
         <div>
           <p class="admin-kicker">Go-live controls</p>
           <h1>Launch readiness.</h1>
-          <p class="admin-muted">Verify the deployed Stripe mode and clear pre-launch invitation records without deleting applications or ticket records.</p>
+          <p class="admin-muted">Verify the deployed Stripe mode and perform the final pre-launch cleanup of test records before opening NOCTURNE to real applicants.</p>
         </div>
       </div>
 
@@ -46,10 +46,19 @@
 
       <section class="admin-review-panel" style="margin-top:24px">
         <p class="admin-kicker">Pre-launch cleanup</p>
-        <h2>Invitation records.</h2>
-        <p class="admin-muted">This deletes all existing invitation-code blobs and removes invitation lifecycle fields from application review records. Applications, applicant contact information, ticket orders, digital tickets, and check-in records are preserved.</p>
+        <h2>Invitation records only.</h2>
+        <p class="admin-muted">Deletes invitation-code records and removes invitation lifecycle fields from applications while preserving the applications and tickets themselves.</p>
         <div class="admin-review-actions">
           <button id="launch-clear-invites" class="admin-danger-button" type="button">Clear all invitation entries</button>
+        </div>
+      </section>
+
+      <section class="admin-review-panel" style="margin-top:24px;border-color:rgba(180,60,60,.6)">
+        <p class="admin-kicker">Final reset</p>
+        <h2>All NOCTURNE test data.</h2>
+        <p class="admin-muted">Permanently deletes every current NOCTURNE application, review, invitation, ticket/order, comp ticket, refund state, and check-in state stored in Netlify Blobs. This does not remove transactions from your Stripe account.</p>
+        <div class="admin-review-actions">
+          <button id="launch-clear-all-test-data" class="admin-danger-button" type="button">Clear all test data</button>
         </div>
       </section>
 
