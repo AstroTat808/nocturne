@@ -126,6 +126,11 @@
   status = 200
 
 [[redirects]]
+  from = "/festival"
+  to = "/festival.html"
+  status = 200
+
+[[redirects]]
   from = "/apply"
   to = "/index.html#apply"
   status = 301
