@@ -8,7 +8,8 @@
   const price = section.querySelector('#launch-stripe-price');
   const ready = section.querySelector('#launch-stripe-ready');
   const refresh = section.querySelector('#launch-refresh-stripe');
-  const clear = section.querySelector('#launch-clear-invites');
+  const clearInvites = section.querySelector('#launch-clear-invites');
+  const clearAll = section.querySelector('#launch-clear-all-test-data');
   const status = section.querySelector('#launch-status');
 
   function money(cents, currency) {
@@ -65,7 +66,7 @@
       return;
     }
 
-    clear.disabled = true;
+    clearInvites.disabled = true;
     text(status, 'Clearing invitation records…');
     try {
       const result = await request({
@@ -73,17 +74,41 @@
         body: JSON.stringify({ action: 'clear-invitations', confirm })
       });
       text(status, `Invitation cleanup complete: ${result.deletedInviteBlobs || 0} invite records deleted and ${result.reviewsReset || 0} application records reset.`);
-      document.querySelector('#admin-refresh')?.click();
     } catch (error) {
       text(status, error.message || 'Invitation cleanup failed.');
     } finally {
-      clear.disabled = false;
+      clearInvites.disabled = false;
+    }
+  }
+
+  async function clearAllTestData() {
+    const warning = 'DANGER: This permanently deletes ALL current application, review, invitation, ticket/order, refund, complimentary-ticket, and check-in data stored by NOCTURNE. This is intended only for the final pre-launch reset.\n\nThis does NOT delete transactions already stored in Stripe.\n\nType CLEAR ALL TEST DATA to continue.';
+    const confirm = window.prompt(warning);
+    if (confirm === null) return;
+    if (confirm !== 'CLEAR ALL TEST DATA') {
+      text(status, 'Full test-data cleanup cancelled — confirmation phrase did not match.');
+      return;
+    }
+
+    clearAll.disabled = true;
+    clearInvites.disabled = true;
+    text(status, 'Deleting all NOCTURNE test data…');
+    try {
+      const result = await request({
+        method: 'POST',
+        body: JSON.stringify({ action: 'clear-all-test-data', confirm })
+      });
+      text(status, `Full cleanup complete: ${result.deletedApplications || 0} applications, ${result.deletedReviews || 0} reviews, ${result.deletedInvites || 0} invitations, and ${result.deletedOrders || 0} ticket/order records deleted.`);
+    } catch (error) {
+      text(status, error.message || 'Full test-data cleanup failed.');
+    } finally {
+      clearAll.disabled = false;
+      clearInvites.disabled = false;
     }
   }
 
   refresh?.addEventListener('click', loadStripe);
-  clear?.addEventListener('click', clearInvitations);
-
-  document.querySelector('#admin-refresh')?.addEventListener('click', () => window.setTimeout(loadStripe, 100));
+  clearInvites?.addEventListener('click', clearInvitations);
+  clearAll?.addEventListener('click', clearAllTestData);
   window.setTimeout(loadStripe, 700);
 })();
