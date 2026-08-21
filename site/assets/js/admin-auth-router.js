@@ -2,6 +2,7 @@
   const nativeFetch = window.fetch.bind(window);
   const DASHBOARD_PATH = '/api/admin/dashboard';
   const AUTH_PATH = '/api/admin/auth';
+  const APPLICATIONS_PATH = '/api/admin/applications';
 
   window.fetch = function nocturneAdminFetch(input, init = {}) {
     try {
@@ -13,6 +14,10 @@
 
           if (method === 'GET' && url.searchParams.get('action') === 'session') {
             return nativeFetch(AUTH_PATH, init);
+          }
+
+          if (method === 'GET' && url.searchParams.get('action') === 'applications') {
+            return nativeFetch(APPLICATIONS_PATH, init);
           }
 
           if (method === 'POST' && typeof init.body === 'string') {
