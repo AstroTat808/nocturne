@@ -24,6 +24,19 @@ const heroImage = Buffer.from(heroBase64, 'base64');
 if (heroImage.length < 50000) throw new Error('NOCTURNE hero image reconstruction failed.');
 await writeFile('site/assets/images/hero-woman-teal.webp', heroImage);
 
+// Swap only the homepage portrait. All copy, logo artwork, layout, effects,
+// festival details, and responsive positioning remain unchanged.
+const heroCssPath = 'site/assets/css/styles.css';
+let heroCss = await readFile(heroCssPath, 'utf8');
+const originalHeroUrl = "url('../images/hero-woman.webp')";
+const tealHeroUrl = "url('../images/hero-woman-teal.webp')";
+if (heroCss.includes(originalHeroUrl)) {
+  heroCss = heroCss.replace(originalHeroUrl, tealHeroUrl);
+  await writeFile(heroCssPath, heroCss);
+} else if (!heroCss.includes(tealHeroUrl)) {
+  throw new Error('NOCTURNE homepage hero CSS target was not found.');
+}
+
 const required = [
   'site/index.html',
   'site/invite.html',
