@@ -1,8 +1,10 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-const INVITE_STORE = 'nocturne-invites';
+const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
+const INVITE_STORE = 'nocturne-invites';
+const ORDER_STORE = 'nocturne-ticket-orders';
 const SESSION_COOKIE = 'nocturne_admin';
 const REQUIRED_WEBHOOK_EVENTS = new Set([
   'checkout.session.completed',
@@ -102,7 +104,6 @@ async function stripeStatus() {
     webhookSecretConfigured,
     webhookEndpointConfigured: false,
     webhookEventsConfigured: false,
-    chargesEnabled: null,
     priceCents: Number.isInteger(priceCents) ? priceCents : 0,
     currency,
     readyForLive: false,
@@ -164,14 +165,20 @@ function withoutInviteFields(review = {}) {
   return next;
 }
 
+async function deleteStoreEntries(storeName) {
+  const store = getStore({ name: storeName, consistency: 'strong' });
+  const { blobs } = await store.list();
+  let deleted = 0;
+  for (const { key } of blobs) {
+    await store.delete(key);
+    deleted += 1;
+  }
+  return deleted;
+}
+
 async function clearInvitations() {
   const inviteStore = getStore({ name: INVITE_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
-
-  // Do not use deleteAll() here. In some Netlify runtime contexts deleteAll() can
-  // be evaluated with build-scoped credentials and return a 403 for a site-wide
-  // store. Individual deletes use the same site-wide store path already used by
-  // the normal invitation revoke workflow.
   const [{ blobs: inviteBlobs }, { blobs: reviewBlobs }] = await Promise.all([
     inviteStore.list(),
     reviewStore.list()
@@ -203,6 +210,24 @@ async function clearInvitations() {
   return { deletedInviteBlobs, reviewsReset };
 }
 
+async function clearAllTestData() {
+  // Delete dependent records first, then applications last. We intentionally use
+  // individual delete() operations because the site's runtime previously rejected
+  // deleteAll() for these site-wide stores with a 403.
+  const deletedInvites = await deleteStoreEntries(INVITE_STORE);
+  const deletedOrders = await deleteStoreEntries(ORDER_STORE);
+  const deletedReviews = await deleteStoreEntries(REVIEW_STORE);
+  const deletedApplications = await deleteStoreEntries(APPLICATION_STORE);
+
+  return {
+    deletedApplications,
+    deletedReviews,
+    deletedInvites,
+    deletedOrders,
+    totalDeleted: deletedApplications + deletedReviews + deletedInvites + deletedOrders
+  };
+}
+
 export default async (req) => {
   if (!authenticated(req)) return json({ error: 'Unauthorized.' }, 401);
 
@@ -216,16 +241,26 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { return json({ error: 'Invalid request.' }, 400); }
 
-  if (body?.action !== 'clear-invitations') return json({ error: 'Unknown action.' }, 400);
-  if (String(body?.confirm || '') !== 'CLEAR INVITATIONS') {
-    return json({ error: 'Confirmation phrase did not match.' }, 400);
-  }
-
   try {
-    const result = await clearInvitations();
-    return json({ ok: true, ...result });
+    if (body?.action === 'clear-invitations') {
+      if (String(body?.confirm || '') !== 'CLEAR INVITATIONS') {
+        return json({ error: 'Confirmation phrase did not match.' }, 400);
+      }
+      const result = await clearInvitations();
+      return json({ ok: true, action: 'clear-invitations', ...result });
+    }
+
+    if (body?.action === 'clear-all-test-data') {
+      if (String(body?.confirm || '') !== 'CLEAR ALL TEST DATA') {
+        return json({ error: 'Confirmation phrase did not match.' }, 400);
+      }
+      const result = await clearAllTestData();
+      return json({ ok: true, action: 'clear-all-test-data', ...result });
+    }
+
+    return json({ error: 'Unknown action.' }, 400);
   } catch (error) {
-    console.error('NOCTURNE launch invitation cleanup failed:', error);
-    return json({ error: error?.message || 'Invitation cleanup failed.' }, 500);
+    console.error('NOCTURNE launch cleanup failed:', error);
+    return json({ error: error?.message || 'Launch cleanup failed.' }, 500);
   }
 };
