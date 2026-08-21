@@ -3,6 +3,8 @@
   const COMP_API = '/api/admin/comp-ticket';
   let applications = [];
   let loading = null;
+  let enhancing = false;
+  let enhanceQueued = false;
 
   async function request(url, options = {}) {
     const response = await fetch(url, {
@@ -21,15 +23,15 @@
   }
 
   async function loadApplications(force = false) {
+    if (loading) return loading;
     if (applications.length && !force) return applications;
-    if (loading && !force) return loading;
+    if (force) applications = [];
+
     loading = request(`${API}?action=applications`).then((data) => {
       applications = data.applications || [];
-      loading = null;
       return applications;
-    }).catch((error) => {
+    }).finally(() => {
       loading = null;
-      throw error;
     });
     return loading;
   }
@@ -164,31 +166,35 @@
   }
 
   async function enhance() {
-    const panel = document.querySelector('#admin-detail .admin-ticket-panel');
-    const actions = panel?.querySelector('.admin-ticket-actions');
-    if (!panel || !actions) return;
-
-    if (isCompPanel()) {
-      const badge = panel.querySelector('.admin-ticket-state');
-      if (badge) badge.textContent = badge.textContent.includes('Checked') ? 'Checked in · Comp' : 'Complimentary';
-      for (const button of actions.querySelectorAll('button')) {
-        if (button.textContent.trim() === 'Refund & cancel ticket') button.remove();
-      }
-      let note = panel.querySelector('.admin-comp-note');
-      if (!note) {
-        note = document.createElement('div');
-        note.className = 'admin-invite-note admin-comp-note';
-        note.textContent = 'Complimentary admission · No Stripe payment required.';
-        panel.append(note);
-      }
+    if (enhancing) {
+      enhanceQueued = true;
       return;
     }
+    enhancing = true;
 
-    if (panel.querySelector('[data-comp-issue]')) return;
     try {
-      // Always re-read the current application state so a newly approved or redeemed
-      // invite can receive a comp ticket without requiring a full browser reload.
-      const application = await selectedApplication(true);
+      const panel = document.querySelector('#admin-detail .admin-ticket-panel');
+      const actions = panel?.querySelector('.admin-ticket-actions');
+      if (!panel || !actions) return;
+
+      if (isCompPanel()) {
+        const badge = panel.querySelector('.admin-ticket-state');
+        if (badge) badge.textContent = badge.textContent.includes('Checked') ? 'Checked in · Comp' : 'Complimentary';
+        for (const button of actions.querySelectorAll('button')) {
+          if (button.textContent.trim() === 'Refund & cancel ticket') button.remove();
+        }
+        let note = panel.querySelector('.admin-comp-note');
+        if (!note) {
+          note = document.createElement('div');
+          note.className = 'admin-invite-note admin-comp-note';
+          note.textContent = 'Complimentary admission · No Stripe payment required.';
+          panel.append(note);
+        }
+        return;
+      }
+
+      if (panel.querySelector('[data-comp-issue]')) return;
+      const application = await selectedApplication(false);
       if (!application || application.review?.status !== 'approved') return;
       const state = application.ticket?.state || 'none';
       if (!['none', 'checkout_created'].includes(state)) return;
@@ -212,6 +218,12 @@
       }
     } catch (error) {
       console.error('NOCTURNE comp ticket controls could not load:', error);
+    } finally {
+      enhancing = false;
+      if (enhanceQueued) {
+        enhanceQueued = false;
+        queueMicrotask(enhance);
+      }
     }
   }
 
