@@ -46,20 +46,64 @@
     return card?.querySelector('p, a')?.textContent?.trim() || '';
   }
 
+  function cleanValue(value) {
+    const text = String(value || '').trim();
+    return !text || text === 'Not provided' || text === '—' ? '' : text;
+  }
+
+  function sameText(a, b) {
+    return cleanValue(a).toLowerCase() === cleanValue(b).toLowerCase();
+  }
+
+  function formatDateTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  }
+
+  function narrow(candidates, actual, getter) {
+    const value = cleanValue(actual);
+    if (!value || candidates.length <= 1) return candidates;
+    const matches = candidates.filter((item) => sameText(getter(item), value));
+    return matches.length ? matches : candidates;
+  }
+
   async function selectedApplication(force = false) {
-    const name = document.querySelector('#admin-detail .admin-detail-head h2')?.textContent?.trim() || '';
-    const email = detailValue('Email');
-    if (!name || !email || email === 'Not provided') return null;
+    const name = cleanValue(document.querySelector('#admin-detail .admin-detail-head h2')?.textContent);
+    const email = cleanValue(detailValue('Email'));
+    if (!name || !email) return null;
+
     const list = await loadApplications(force);
-    const matches = list.filter((item) => item.fullName === name && item.email === email);
+    let matches = list.filter((item) => sameText(item.fullName, name) && sameText(item.email, email));
+    if (matches.length === 1) return matches[0];
+    if (!matches.length) return null;
+
+    matches = narrow(matches, detailValue('Mobile'), (item) => item.phone);
+    matches = narrow(matches, detailValue('Location'), (item) => item.location);
+    matches = narrow(matches, detailValue('Instagram'), (item) => item.instagram);
+    matches = narrow(matches, detailValue('Referral'), (item) => item.referral);
     if (matches.length === 1) return matches[0];
 
-    const ticketId = ticketValue('Ticket ID');
-    if (ticketId && ticketId !== '—') {
-      const byTicket = matches.find((item) => item.ticket?.ticketId === ticketId);
-      if (byTicket) return byTicket;
+    const submitted = cleanValue(document.querySelector('#admin-detail .admin-detail-head p')?.textContent).replace(/^Submitted\s+/i, '');
+    if (submitted) {
+      const bySubmitted = matches.filter((item) => formatDateTime(item.createdAt) === submitted);
+      if (bySubmitted.length === 1) return bySubmitted[0];
+      if (bySubmitted.length) matches = bySubmitted;
     }
-    return null;
+
+    const ticketId = cleanValue(ticketValue('Ticket ID'));
+    if (ticketId) {
+      const byTicket = matches.filter((item) => item.ticket?.ticketId === ticketId);
+      if (byTicket.length === 1) return byTicket[0];
+      if (byTicket.length) matches = byTicket;
+    }
+
+    const eligible = matches.filter((item) => {
+      const state = item.ticket?.state || 'none';
+      return item.review?.status === 'approved' && ['none', 'checkout_created'].includes(state);
+    });
+    return eligible.length === 1 ? eligible[0] : null;
   }
 
   function status(message, error = false) {
@@ -82,7 +126,9 @@
       const application = await selectedApplication(true);
       if (!application) throw new Error('Could not uniquely identify this application. Refresh the dashboard and try again.');
       if (application.review?.status !== 'approved') throw new Error('Approve this application before issuing a complimentary ticket.');
-      if (!window.confirm(`Issue a complimentary NOCTURNE ticket to ${application.fullName}?\n\nNo Stripe payment will be required.`)) return;
+      const ticketState = application.ticket?.state || 'none';
+      if (!['none', 'checkout_created'].includes(ticketState)) throw new Error('This guest already has an active or completed ticket record.');
+      if (!window.confirm(`Issue a complimentary NOCTURNE ticket to ${application.fullName}?\n\nNo Stripe payment will be required. Any unpaid checkout record will be replaced by the complimentary ticket.`)) return;
       status('Issuing complimentary ticket…');
       const result = await request(COMP_API, {
         method: 'POST',
@@ -140,10 +186,13 @@
 
     if (panel.querySelector('[data-comp-issue]')) return;
     try {
-      const application = await selectedApplication();
+      // Always re-read the current application state so a newly approved or redeemed
+      // invite can receive a comp ticket without requiring a full browser reload.
+      const application = await selectedApplication(true);
       if (!application || application.review?.status !== 'approved') return;
       const state = application.ticket?.state || 'none';
       if (!['none', 'checkout_created'].includes(state)) return;
+
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'admin-outline-button';
@@ -151,7 +200,19 @@
       button.textContent = 'Issue comp ticket';
       button.addEventListener('click', () => issueComp(button));
       actions.insertBefore(button, actions.querySelector('.admin-status'));
-    } catch {}
+
+      if (application.review?.inviteState === 'redeemed') {
+        let note = panel.querySelector('.admin-comp-eligible-note');
+        if (!note) {
+          note = document.createElement('div');
+          note.className = 'admin-invite-note admin-comp-eligible-note';
+          note.textContent = 'Invitation redeemed · Eligible for a complimentary ticket without Stripe checkout.';
+          panel.append(note);
+        }
+      }
+    } catch (error) {
+      console.error('NOCTURNE comp ticket controls could not load:', error);
+    }
   }
 
   document.addEventListener('click', (event) => {
