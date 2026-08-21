@@ -179,13 +179,15 @@
 
       if (isCompPanel()) {
         const badge = panel.querySelector('.admin-ticket-state');
-        if (badge) badge.textContent = badge.textContent.includes('Checked') ? 'Checked in · Comp' : 'Complimentary';
+        const desiredBadge = badge?.textContent?.includes('Checked') ? 'Checked in · Comp' : 'Complimentary';
+        if (badge && badge.textContent !== desiredBadge) badge.textContent = desiredBadge;
+
         for (const button of actions.querySelectorAll('button')) {
           if (button.textContent.trim() === 'Refund & cancel ticket') button.remove();
         }
-        let note = panel.querySelector('.admin-comp-note');
-        if (!note) {
-          note = document.createElement('div');
+
+        if (!panel.querySelector('.admin-comp-note')) {
+          const note = document.createElement('div');
           note.className = 'admin-invite-note admin-comp-note';
           note.textContent = 'Complimentary admission · No Stripe payment required.';
           panel.append(note);
@@ -207,14 +209,11 @@
       button.addEventListener('click', () => issueComp(button));
       actions.insertBefore(button, actions.querySelector('.admin-status'));
 
-      if (application.review?.inviteState === 'redeemed') {
-        let note = panel.querySelector('.admin-comp-eligible-note');
-        if (!note) {
-          note = document.createElement('div');
-          note.className = 'admin-invite-note admin-comp-eligible-note';
-          note.textContent = 'Invitation redeemed · Eligible for a complimentary ticket without Stripe checkout.';
-          panel.append(note);
-        }
+      if (application.review?.inviteState === 'redeemed' && !panel.querySelector('.admin-comp-eligible-note')) {
+        const note = document.createElement('div');
+        note.className = 'admin-invite-note admin-comp-eligible-note';
+        note.textContent = 'Invitation redeemed · Eligible for a complimentary ticket without Stripe checkout.';
+        panel.append(note);
       }
     } catch (error) {
       console.error('NOCTURNE comp ticket controls could not load:', error);
@@ -222,7 +221,7 @@
       enhancing = false;
       if (enhanceQueued) {
         enhanceQueued = false;
-        queueMicrotask(enhance);
+        window.setTimeout(enhance, 0);
       }
     }
   }
@@ -237,7 +236,15 @@
 
   const detail = document.querySelector('#admin-detail');
   if (detail) {
-    new MutationObserver(() => queueMicrotask(enhance)).observe(detail, { childList: true, subtree: true });
+    new MutationObserver(() => {
+      if (!enhanceQueued) {
+        enhanceQueued = true;
+        window.setTimeout(() => {
+          enhanceQueued = false;
+          enhance();
+        }, 0);
+      }
+    }).observe(detail, { childList: true, subtree: true });
   }
 
   document.querySelector('#admin-refresh')?.addEventListener('click', () => { applications = []; });
