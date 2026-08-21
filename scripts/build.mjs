@@ -49,6 +49,7 @@ const required = [
   'netlify/functions/_ticket-auth.mjs',
   'netlify/functions/_ticket-token.mjs',
   'netlify/functions/ticket-access.mjs',
+  'netlify/functions/ticket-reentry.mjs',
   'netlify/functions/create-checkout.mjs',
   'netlify/functions/stripe-webhook.mjs',
   'netlify/functions/ticket-confirmed.mjs',
