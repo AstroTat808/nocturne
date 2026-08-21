@@ -130,9 +130,6 @@ async function stripeStatus() {
       result.webhookEventsConfigured = events.includes('*') || [...REQUIRED_WEBHOOK_EVENTS].every((event) => events.includes(event));
     }
 
-    // Stripe's Balance object is mode-specific. A live response proves the deployed key is live.
-    // We keep chargesEnabled nullable here because this endpoint deliberately uses only the
-    // minimum status APIs needed for launch verification.
     result.readyForLive = result.apiMode === 'live'
       && result.webhookSecretConfigured
       && result.webhookEndpointConfigured
@@ -171,13 +168,23 @@ async function clearInvitations() {
   const inviteStore = getStore({ name: INVITE_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
 
-  const [{ deletedBlobs }, { blobs }] = await Promise.all([
-    inviteStore.deleteAll(),
+  // Do not use deleteAll() here. In some Netlify runtime contexts deleteAll() can
+  // be evaluated with build-scoped credentials and return a 403 for a site-wide
+  // store. Individual deletes use the same site-wide store path already used by
+  // the normal invitation revoke workflow.
+  const [{ blobs: inviteBlobs }, { blobs: reviewBlobs }] = await Promise.all([
+    inviteStore.list(),
     reviewStore.list()
   ]);
 
+  let deletedInviteBlobs = 0;
+  for (const { key } of inviteBlobs) {
+    await inviteStore.delete(key);
+    deletedInviteBlobs += 1;
+  }
+
   let reviewsReset = 0;
-  for (const { key } of blobs) {
+  for (const { key } of reviewBlobs) {
     const review = await reviewStore.get(key, { type: 'json', consistency: 'strong' });
     if (!review) continue;
     const hasInviteData = Boolean(
@@ -193,7 +200,7 @@ async function clearInvitations() {
     reviewsReset += 1;
   }
 
-  return { deletedInviteBlobs: deletedBlobs || 0, reviewsReset };
+  return { deletedInviteBlobs, reviewsReset };
 }
 
 export default async (req) => {
