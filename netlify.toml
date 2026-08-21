@@ -49,6 +49,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/applications"
+  to = "/.netlify/functions/admin-applications"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/dashboard"
   to = "/.netlify/functions/admin-dashboard"
   status = 200
