@@ -33,6 +33,7 @@ const required = [
   'site/assets/js/app.js',
   'site/assets/js/invite.js',
   'site/assets/js/admin.js',
+  'site/assets/js/admin-refund.js',
   'site/assets/js/check-in.js',
   'site/assets/js/ticket-view.js',
   'site/assets/vendor/html5-qrcode.min.js',
