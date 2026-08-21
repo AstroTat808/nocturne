@@ -32,6 +32,7 @@ const required = [
   'site/assets/css/check-in.css',
   'site/assets/js/app.js',
   'site/assets/js/invite.js',
+  'site/assets/js/admin-auth-router.js',
   'site/assets/js/admin.js',
   'site/assets/js/admin-comp.js',
   'site/assets/js/admin-email.js',
@@ -55,6 +56,7 @@ const required = [
   'netlify/functions/ticket-qr.mjs',
   'netlify/functions/check-in.mjs',
   'netlify/functions/create-invites.mjs',
+  'netlify/functions/admin-auth.mjs',
   'netlify/functions/admin-dashboard.mjs',
   'netlify/functions/admin-comp-ticket.mjs',
   'netlify/functions/admin-approval-email.mjs'
