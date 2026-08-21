@@ -71,6 +71,22 @@ function escapeHtml(value = '') {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
+async function resolveSubmissionIdFromCode(code) {
+  const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
+  const { blobs } = await reviewStore.list();
+  const expectedHash = hashCode(code);
+  const matches = [];
+
+  for (const { key } of blobs) {
+    const review = await reviewStore.get(key, { type: 'json', consistency: 'strong' });
+    if (!review || review.status !== 'approved' || review.inviteState !== 'active' || !review.inviteHash) continue;
+    if (safeEqual(review.inviteHash, expectedHash)) matches.push(key);
+    if (matches.length > 1) break;
+  }
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (!allowedOrigin(req)) return json({ error: 'Origin not allowed.' }, 403);
@@ -79,10 +95,13 @@ export default async (req) => {
 
   let body;
   try { body = await req.json(); } catch { return json({ error: 'Invalid request.' }, 400); }
-  const submissionId = String(body.submissionId || '').trim();
   const code = normalizeCode(body.code);
-  if (!/^[A-Za-z0-9_-]{6,128}$/.test(submissionId)) return json({ error: 'Invalid submission ID.' }, 400);
   if (!/^NOC-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) return json({ error: 'Invalid invitation code.' }, 400);
+
+  let submissionId = String(body.submissionId || '').trim();
+  if (submissionId && !/^[A-Za-z0-9_-]{6,128}$/.test(submissionId)) return json({ error: 'Invalid submission ID.' }, 400);
+  if (!submissionId) submissionId = await resolveSubmissionIdFromCode(code);
+  if (!submissionId) return json({ error: 'Could not uniquely match this invitation code to an approved applicant.' }, 409);
 
   const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
