@@ -5,6 +5,7 @@ import { accessSecret, accessTtlSeconds, makeAccessCookie, makeAccessToken } fro
 const STORE_NAME = 'nocturne-invites';
 const REVIEW_STORE = 'nocturne-application-reviews';
 const APPLICATION_STORE = 'nocturne-applications';
+const HELP_EMAIL = process.env.NOCTURNE_HELP_EMAIL || 'help@nocturnefestival.com';
 
 function json(data, status = 200, extraHeaders = {}) {
   return Response.json(data, {
@@ -155,13 +156,15 @@ async function sendRedemptionConfirmation(req, invite, usedAt, ticketUrl) {
       '',
       'Keep an eye on this email address for future private access instructions.',
       '',
+      `Need help with the website? ${HELP_EMAIL}`,
+      '',
       `NOCTURNE: ${siteUrl}`,
       '',
       'NOCTURNE Festival',
       'Presented by Wild Ones · Hawai‘i'
     ].join('\n');
 
-    const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Access Confirmed</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:42px;line-height:1.04;color:#fff3df;margin:16px 0 22px">Your access<br>is confirmed.</h1><p style="color:#c8baa4;line-height:1.7">${safeName}, your NOCTURNE invitation was successfully redeemed.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.7">${escapeHtml(statusCopy)}</div><p style="color:#9d907f;line-height:1.7">Keep an eye on this email address for future private access instructions.</p><p style="text-align:center;margin:30px 0 10px"><a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:14px 20px;border:1px solid rgba(216,154,43,.6);color:#ffca61;text-decoration:none;font-size:11px;letter-spacing:2px;text-transform:uppercase">Return to NOCTURNE</a></p><div style="margin-top:34px;padding-top:20px;border-top:1px solid rgba(216,154,43,.18);color:#74695b;font-size:11px;letter-spacing:1px;text-transform:uppercase">NOCTURNE Festival · Presented by Wild Ones · Hawai‘i</div></div></div></body></html>`;
+    const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Access Confirmed</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:42px;line-height:1.04;color:#fff3df;margin:16px 0 22px">Your access<br>is confirmed.</h1><p style="color:#c8baa4;line-height:1.7">${safeName}, your NOCTURNE invitation was successfully redeemed.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.7">${escapeHtml(statusCopy)}</div><p style="color:#9d907f;line-height:1.7">Keep an eye on this email address for future private access instructions.</p><p style="text-align:center;margin:30px 0 10px"><a href="${escapeHtml(siteUrl)}" style="display:inline-block;padding:14px 20px;border:1px solid rgba(216,154,43,.6);color:#ffca61;text-decoration:none;font-size:11px;letter-spacing:2px;text-transform:uppercase">Return to NOCTURNE</a></p><p style="color:#807564;font-size:12px">Need help with the website? <a href="mailto:${escapeHtml(HELP_EMAIL)}" style="color:#ffca61">${escapeHtml(HELP_EMAIL)}</a></p><div style="margin-top:34px;padding-top:20px;border-top:1px solid rgba(216,154,43,.18);color:#74695b;font-size:11px;letter-spacing:1px;text-transform:uppercase">NOCTURNE Festival · Presented by Wild Ones · Hawai‘i</div></div></div></body></html>`;
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
