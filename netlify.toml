@@ -55,6 +55,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/approval-email"
+  to = "/.netlify/functions/admin-approval-email"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/ticket-access/checkout"
   to = "/.netlify/functions/create-checkout"
   status = 200
