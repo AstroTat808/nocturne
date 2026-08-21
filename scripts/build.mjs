@@ -85,6 +85,7 @@ const required = [
   'site/assets/images/hero-woman.webp',
   'site/assets/images/hero-woman-teal.webp',
   'netlify/functions/apply.mjs',
+  'netlify/functions/apply-security.mjs',
   'netlify/functions/redeem-invite.mjs',
   'netlify/functions/invite-view.mjs',
   'netlify/functions/_ticket-auth.mjs',
