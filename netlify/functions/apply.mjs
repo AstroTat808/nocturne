@@ -181,8 +181,13 @@ async function enforceRateLimit(req, fields) {
 async function verifyTurnstile(req, fields) {
   const secret = clean(process.env.NOCTURNE_TURNSTILE_SECRET_KEY, 500);
   const siteKey = clean(process.env.NOCTURNE_TURNSTILE_SITE_KEY, 500);
-  if (!secret && !siteKey) return { ok: true, configured: false };
-  if (!secret || !siteKey) return { ok: false, configured: true, error: 'Bot protection is temporarily unavailable. Please contact support.' };
+
+  // Production applications fail closed: if Turnstile is not fully configured,
+  // no application can be persisted or emailed.
+  if (!secret || !siteKey) {
+    console.error('NOCTURNE Turnstile configuration is incomplete.');
+    return { ok: false, configured: false, error: 'Bot protection is temporarily unavailable. Please contact support.' };
+  }
 
   const token = clean(fields['cf-turnstile-response'], 4096);
   if (!token) return { ok: false, configured: true, error: 'Please complete the security check and try again.' };
@@ -200,7 +205,8 @@ async function verifyTurnstile(req, fields) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body
     });
-  } catch {
+  } catch (error) {
+    console.error('NOCTURNE Turnstile Siteverify request failed:', error);
     return { ok: false, configured: true, error: 'The security check could not be verified. Please try again.' };
   }
 
@@ -211,6 +217,7 @@ async function verifyTurnstile(req, fields) {
   }
 
   if (result.action && result.action !== 'invite_request') {
+    console.warn('NOCTURNE Turnstile action mismatch:', result.action);
     return { ok: false, configured: true, error: 'The security check was invalid. Please refresh and try again.' };
   }
 
@@ -221,9 +228,11 @@ async function verifyTurnstile(req, fields) {
     }
   } catch {}
   if (result.hostname && !expectedHosts.has(result.hostname)) {
+    console.warn('NOCTURNE Turnstile hostname mismatch:', result.hostname);
     return { ok: false, configured: true, error: 'The security check came from an unexpected host.' };
   }
 
+  console.info('NOCTURNE Turnstile Siteverify succeeded.');
   return { ok: true, configured: true };
 }
 
@@ -294,15 +303,18 @@ export default async (req) => {
   const error = validate(fields);
   if (error) return json({ error }, 400);
 
+  // Validate the Cloudflare token before any application is accepted or silently
+  // filtered. This ensures every legitimate submission path is protected by
+  // server-side Siteverify and is visible in Turnstile validation analytics.
+  const turnstile = await verifyTurnstile(req, fields);
+  if (!turnstile.ok) return json({ error: turnstile.error }, 403);
+
   if (spamScore(fields) >= 4) {
-    console.warn('NOCTURNE application rejected by spam scoring.');
+    console.warn('NOCTURNE application rejected by spam scoring after Turnstile validation.');
     return req.headers.get('x-nocturne-ajax') === '1'
       ? json({ ok: true }, 201)
       : new Response(null, { status: 303, headers: { Location: '/application-received.html' } });
   }
-
-  const turnstile = await verifyTurnstile(req, fields);
-  if (!turnstile.ok) return json({ error: turnstile.error }, 403);
 
   try {
     const rate = await enforceRateLimit(req, fields);
