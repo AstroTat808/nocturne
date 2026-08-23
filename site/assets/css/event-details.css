@@ -183,11 +183,12 @@
   text-shadow: 0 8px 28px rgba(0,0,0,.66);
 }
 
-.lineup-artist:nth-child(1) {
+/* SUPERBABE! — oversized condensed gold headliner with flyer star accents. */
+.lineup-superbabe {
   margin: .08em 0 .12em;
   font-family: var(--sans);
   font-size: clamp(3.5rem, 8.8vw, 8.3rem);
-  font-weight: 600;
+  font-weight: 700;
   line-height: .78;
   letter-spacing: -.055em;
   background: linear-gradient(180deg, #ffe7a8 0%, #d89525 42%, #7f4811 82%, #f1b74b 100%);
@@ -198,8 +199,8 @@
   filter: drop-shadow(0 4px 14px rgba(216,154,43,.18));
 }
 
-.lineup-artist:nth-child(1)::before,
-.lineup-artist:nth-child(1)::after {
+.lineup-superbabe::before,
+.lineup-superbabe::after {
   content: '✦';
   display: inline-block;
   margin: 0 .18em;
@@ -210,7 +211,8 @@
   text-shadow: 0 0 16px rgba(255,202,97,.35);
 }
 
-.lineup-artist:nth-child(2) {
+/* SAPIENCE — sleek pale geometric treatment. */
+.lineup-sapience {
   font-family: var(--sans);
   font-size: clamp(2.7rem, 6.7vw, 6.2rem);
   font-weight: 300;
@@ -222,7 +224,24 @@
   -webkit-text-fill-color: transparent;
 }
 
-.lineup-artist:nth-child(3) {
+/* ODYSSEUS — heavy angular metallic block treatment. */
+.lineup-odysseus {
+  font-family: var(--sans);
+  font-size: clamp(2.9rem, 6.9vw, 6.5rem);
+  font-weight: 800;
+  line-height: .84;
+  letter-spacing: -.055em;
+  transform: scaleX(.93);
+  background: linear-gradient(180deg, #fff0cc 0%, #b69c73 52%, #75532a 74%, #e4c18f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: #d9c6a7;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.45));
+}
+
+/* TEAA REXX — warm gold display face. */
+.lineup-teaa {
   font-family: var(--sans);
   font-size: clamp(2.65rem, 6.6vw, 6.1rem);
   font-weight: 600;
@@ -234,22 +253,13 @@
   -webkit-text-fill-color: transparent;
 }
 
-.lineup-artist:nth-child(4) {
-  font-family: var(--serif);
-  font-size: clamp(2.55rem, 6.1vw, 5.8rem);
-  font-weight: 500;
-  letter-spacing: .015em;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: 1px #d99b38;
-  text-shadow: 0 0 20px rgba(216,154,43,.12);
-}
-
-.lineup-artist:nth-child(5) {
+/* AGENT 39 — strong light metallic techno treatment. */
+.lineup-agent {
   font-family: var(--sans);
   font-size: clamp(2.5rem, 6vw, 5.6rem);
-  font-weight: 600;
-  letter-spacing: -.03em;
+  font-weight: 700;
+  letter-spacing: -.04em;
+  transform: scaleX(.95);
   background: linear-gradient(180deg, #fff4dc, #9c8b70 78%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -257,11 +267,12 @@
   -webkit-text-fill-color: transparent;
 }
 
-.lineup-artist:nth-child(6) {
+/* OPULENCE — elegant gold serif. */
+.lineup-opulence {
   font-family: var(--serif);
   font-size: clamp(2.8rem, 6.6vw, 6.2rem);
-  font-weight: 600;
-  letter-spacing: .02em;
+  font-weight: 500;
+  letter-spacing: .035em;
   background: linear-gradient(180deg, #f8d07b, #91520f 76%, #e8a537);
   -webkit-background-clip: text;
   background-clip: text;
@@ -269,27 +280,49 @@
   -webkit-text-fill-color: transparent;
 }
 
-.lineup-artist:nth-child(7) {
+/* HASKEL — tall outlined art-deco treatment from the updated flyer. */
+.lineup-haskel {
   font-family: var(--sans);
-  font-size: clamp(2.8rem, 6.8vw, 6.4rem);
-  font-weight: 600;
-  line-height: .84;
-  letter-spacing: -.055em;
-  background: linear-gradient(180deg, #fff0cc, #aa9675 72%, #e0c596);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: #d9c6a7;
+  font-size: clamp(2.85rem, 6.9vw, 6.5rem);
+  font-weight: 300;
+  line-height: .88;
+  letter-spacing: .13em;
+  color: transparent;
   -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 1.35px #c98a2f;
+  text-shadow: 0 0 22px rgba(216,154,43,.12);
+  transform: scaleX(.83);
 }
 
 .lineup-more {
-  margin-top: .85rem;
+  position: relative;
+  margin-top: .9rem;
+  padding: 0 clamp(2.5rem, 8vw, 7rem);
   color: var(--gold);
   font-family: var(--sans);
-  font-size: .72rem;
+  font-size: clamp(.68rem, 1.3vw, .82rem);
   font-weight: 500;
   letter-spacing: .28em;
   text-transform: uppercase;
+}
+
+.lineup-more::before,
+.lineup-more::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: clamp(2rem, 7vw, 6rem);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(216,154,43,.65));
+}
+
+.lineup-more::before {
+  right: calc(100% - 2rem);
+}
+
+.lineup-more::after {
+  left: calc(100% - 2rem);
+  transform: scaleX(-1);
 }
 
 .event-location-note {
@@ -317,7 +350,10 @@
   .event-fact { min-height: 0; }
   .lineup-block { padding-inline: .8rem; }
   .lineup-grid { gap: .12rem; }
-  .lineup-artist:nth-child(4) { -webkit-text-stroke-width: .7px; }
-  .lineup-artist:nth-child(1)::before,
-  .lineup-artist:nth-child(1)::after { margin: 0 .1em; }
+  .lineup-haskel { -webkit-text-stroke-width: .8px; letter-spacing: .1em; }
+  .lineup-superbabe::before,
+  .lineup-superbabe::after { margin: 0 .1em; }
+  .lineup-more { padding-inline: 1.3rem; letter-spacing: .2em; }
+  .lineup-more::before,
+  .lineup-more::after { display: none; }
 }
