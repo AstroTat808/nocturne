@@ -351,8 +351,29 @@
   .lineup-block { padding-inline: .8rem; }
   .lineup-grid { gap: .12rem; }
   .lineup-haskel { -webkit-text-stroke-width: .8px; letter-spacing: .1em; }
+
+  /* Keep the headliner stars locked to the left and right of the name on phones. */
+  .lineup-superbabe {
+    width: calc(100% - .25rem);
+    box-sizing: border-box;
+    padding: 0 1.35rem;
+    font-size: clamp(2.75rem, 12.2vw, 3.25rem);
+    line-height: .86;
+  }
+
   .lineup-superbabe::before,
-  .lineup-superbabe::after { margin: 0 .1em; }
+  .lineup-superbabe::after {
+    position: absolute;
+    top: 50%;
+    margin: 0;
+    font-size: .22em;
+    vertical-align: baseline;
+    transform: translateY(-50%);
+  }
+
+  .lineup-superbabe::before { left: .05rem; }
+  .lineup-superbabe::after { right: .05rem; }
+
   .lineup-more { padding-inline: 1.3rem; letter-spacing: .2em; }
   .lineup-more::before,
   .lineup-more::after { display: none; }
