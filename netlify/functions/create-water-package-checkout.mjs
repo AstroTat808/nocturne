@@ -137,8 +137,8 @@ export default async (req) => {
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': currency,
     'line_items[0][price_data][unit_amount]': String(config.priceCents),
-    'line_items[0][price_data][product_data][name]': 'NOCTURNE Unlimited Drinking Water',
-    'line_items[0][price_data][product_data][description]': 'Unlimited drinking-water service for one registered NOCTURNE guest during festival operating hours. Non-transferable.'
+    'line_items[0][price_data][product_data][name]': 'NOCTURNE Unlimited Drinking Water — NON-REFUNDABLE',
+    'line_items[0][price_data][product_data][description]': 'FINAL SALE / NON-REFUNDABLE. Unlimited drinking-water service for one registered NOCTURNE guest during festival operating hours. Personal and non-transferable. No refunds, exchanges, prorating, or cash value.'
   };
   if (!params.customer_email) delete params.customer_email;
 
