@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { appleWalletStatus } from './_apple-wallet.mjs';
 import { drinkPackageConfig } from './_drink-package.mjs';
 import { waterPackageConfig } from './_water-package.mjs';
+import adminRehearsal from './admin-rehearsal.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -172,57 +173,30 @@ async function stripeStatus() {
       : key
         ? 'unknown'
         : 'missing';
-
   const priceCents = Number(process.env.NOCTURNE_TICKET_PRICE_CENTS || 0);
   const currency = String(process.env.NOCTURNE_TICKET_CURRENCY || 'usd').toLowerCase();
   const webhookSecretConfigured = Boolean(process.env.STRIPE_WEBHOOK_SECRET);
   const result = {
-    configured: Boolean(key),
-    keyMode,
-    apiReachable: false,
-    apiMode: null,
-    webhookSecretConfigured,
-    webhookEndpointConfigured: false,
-    webhookEventsConfigured: false,
-    priceCents: Number.isInteger(priceCents) ? priceCents : 0,
-    currency,
-    configurationReady: false,
-    livePaymentVerified: false,
-    livePayment: null,
-    livePaymentCheckError: null,
-    fulfillmentVerified: false,
-    fulfillment: null,
-    readyForLive: false,
-    error: null
+    configured: Boolean(key), keyMode, apiReachable: false, apiMode: null,
+    webhookSecretConfigured, webhookEndpointConfigured: false, webhookEventsConfigured: false,
+    priceCents: Number.isInteger(priceCents) ? priceCents : 0, currency,
+    configurationReady: false, livePaymentVerified: false, livePayment: null,
+    livePaymentCheckError: null, fulfillmentVerified: false, fulfillment: null,
+    readyForLive: false, error: null
   };
-
   if (!key) return result;
-
   try {
-    const [balance, endpoints] = await Promise.all([
-      stripeGet('balance'),
-      stripeGet('webhook_endpoints?limit=100')
-    ]);
-
+    const [balance, endpoints] = await Promise.all([stripeGet('balance'), stripeGet('webhook_endpoints?limit=100')]);
     result.apiReachable = true;
     result.apiMode = balance?.livemode === true ? 'live' : balance?.livemode === false ? 'test' : null;
-
     const expectedUrl = `${(process.env.NOCTURNE_SITE_URL || 'https://nocturnefestival.com').replace(/\/$/, '')}/api/stripe/webhook`;
-    const endpoint = Array.isArray(endpoints?.data)
-      ? endpoints.data.find((item) => item?.url === expectedUrl && item?.status !== 'disabled')
-      : null;
+    const endpoint = Array.isArray(endpoints?.data) ? endpoints.data.find((item) => item?.url === expectedUrl && item?.status !== 'disabled') : null;
     result.webhookEndpointConfigured = Boolean(endpoint);
     if (endpoint) {
       const events = Array.isArray(endpoint.enabled_events) ? endpoint.enabled_events : [];
       result.webhookEventsConfigured = events.includes('*') || [...REQUIRED_WEBHOOK_EVENTS].every((event) => events.includes(event));
     }
-
-    result.configurationReady = result.apiMode === 'live'
-      && result.webhookSecretConfigured
-      && result.webhookEndpointConfigured
-      && result.webhookEventsConfigured
-      && result.priceCents >= 50;
-
+    result.configurationReady = result.apiMode === 'live' && result.webhookSecretConfigured && result.webhookEndpointConfigured && result.webhookEventsConfigured && result.priceCents >= 50;
     if (result.apiMode === 'live') {
       const evidence = await latestLiveAdmissionPayment(result.priceCents);
       result.livePaymentVerified = evidence.verified;
@@ -233,12 +207,10 @@ async function stripeStatus() {
         result.fulfillmentVerified = Boolean(result.fulfillment?.verified);
       }
     }
-
     result.readyForLive = result.configurationReady && result.livePaymentVerified && result.fulfillmentVerified;
   } catch (error) {
     result.error = String(error?.message || error).slice(0, 300);
   }
-
   return result;
 }
 
@@ -246,61 +218,28 @@ async function emailStatus() {
   const configured = Boolean(process.env.RESEND_API_KEY && process.env.NOCTURNE_EMAIL_FROM);
   const from = String(process.env.NOCTURNE_EMAIL_FROM || '').trim();
   const domainName = /@([^>\s]+)/.exec(from)?.[1]?.toLowerCase() || '';
-  const result = {
-    configured,
-    operational: false,
-    restrictedSendOnlyKey: false,
-    fromAddress: from,
-    domainName,
-    domainFound: false,
-    domainStatus: null,
-    sendingCapability: null,
-    receivingCapability: null,
-    region: null,
-    sendingEnabled: false,
-    diagnostic: null,
-    error: null
-  };
-
-  if (!configured) {
-    result.diagnostic = 'RESEND_API_KEY and/or NOCTURNE_EMAIL_FROM is not configured.';
-    return result;
-  }
-  if (!domainName) {
-    result.diagnostic = 'NOCTURNE_EMAIL_FROM does not contain a valid sending domain.';
-    return result;
-  }
-
+  const result = { configured, operational: false, restrictedSendOnlyKey: false, fromAddress: from, domainName, domainFound: false, domainStatus: null, sendingCapability: null, receivingCapability: null, region: null, sendingEnabled: false, diagnostic: null, error: null };
+  if (!configured) { result.diagnostic = 'RESEND_API_KEY and/or NOCTURNE_EMAIL_FROM is not configured.'; return result; }
+  if (!domainName) { result.diagnostic = 'NOCTURNE_EMAIL_FROM does not contain a valid sending domain.'; return result; }
   try {
     const response = await fetch('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || `Resend returned ${response.status}.`);
     const domain = Array.isArray(data.data) ? data.data.find((item) => String(item?.name || '').toLowerCase() === domainName) : null;
     result.domainFound = Boolean(domain);
-    if (!domain) {
-      result.diagnostic = `Resend API: domain ${domainName} was not found in this account.`;
-      return result;
-    }
-
+    if (!domain) { result.diagnostic = `Resend API: domain ${domainName} was not found in this account.`; return result; }
     result.domainStatus = domain?.status || null;
     result.sendingCapability = domain?.capabilities?.sending || null;
     result.receivingCapability = domain?.capabilities?.receiving || null;
     result.region = domain?.region || null;
     result.sendingEnabled = result.sendingCapability === 'enabled' || result.domainStatus === 'verified';
     result.operational = result.sendingEnabled;
-    result.diagnostic = [
-      `Domain ${domainName}`,
-      `status: ${result.domainStatus || 'not reported'}`,
-      `sending: ${result.sendingCapability || 'not reported'}`,
-      result.region ? `region: ${result.region}` : null
-    ].filter(Boolean).join(' · ');
+    result.diagnostic = [`Domain ${domainName}`, `status: ${result.domainStatus || 'not reported'}`, `sending: ${result.sendingCapability || 'not reported'}`, result.region ? `region: ${result.region}` : null].filter(Boolean).join(' · ');
   } catch (error) {
     result.error = String(error?.message || error).slice(0, 300);
     result.restrictedSendOnlyKey = /restricted to only send emails/i.test(result.error);
     result.operational = configured && result.restrictedSendOnlyKey;
-    result.diagnostic = result.restrictedSendOnlyKey
-      ? `Send-only Resend API key accepted for ${domainName}; domain-management lookup is intentionally unavailable.`
-      : `Resend API error: ${result.error}`;
+    result.diagnostic = result.restrictedSendOnlyKey ? `Send-only Resend API key accepted for ${domainName}; domain-management lookup is intentionally unavailable.` : `Resend API error: ${result.error}`;
   }
   return result;
 }
@@ -315,23 +254,14 @@ function operationsStatus() {
   const drink = drinkPackageConfig();
   const water = waterPackageConfig();
   const dedicatedSecrets = {
-    adminSession: Boolean(process.env.NOCTURNE_ADMIN_SESSION_SECRET),
-    checkinKey: Boolean(process.env.NOCTURNE_CHECKIN_KEY),
-    checkinSession: Boolean(process.env.NOCTURNE_CHECKIN_SESSION_SECRET),
-    barKey: Boolean(process.env.NOCTURNE_BAR_KEY),
-    barSession: Boolean(process.env.NOCTURNE_BAR_SESSION_SECRET),
-    ticketQr: Boolean(process.env.NOCTURNE_TICKET_QR_SECRET),
+    adminSession: Boolean(process.env.NOCTURNE_ADMIN_SESSION_SECRET), checkinKey: Boolean(process.env.NOCTURNE_CHECKIN_KEY),
+    checkinSession: Boolean(process.env.NOCTURNE_CHECKIN_SESSION_SECRET), barKey: Boolean(process.env.NOCTURNE_BAR_KEY),
+    barSession: Boolean(process.env.NOCTURNE_BAR_SESSION_SECRET), ticketQr: Boolean(process.env.NOCTURNE_TICKET_QR_SECRET),
     ticketAccess: Boolean(process.env.NOCTURNE_TICKET_ACCESS_SECRET)
   };
-  const turnstile = {
-    siteKeyConfigured: Boolean(process.env.NOCTURNE_TURNSTILE_SITE_KEY),
-    secretKeyConfigured: Boolean(process.env.NOCTURNE_TURNSTILE_SECRET_KEY)
-  };
+  const turnstile = { siteKeyConfigured: Boolean(process.env.NOCTURNE_TURNSTILE_SITE_KEY), secretKeyConfigured: Boolean(process.env.NOCTURNE_TURNSTILE_SECRET_KEY) };
   turnstile.ready = turnstile.siteKeyConfigured && turnstile.secretKeyConfigured;
-  const venue = {
-    nameConfigured: Boolean(process.env.NOCTURNE_VENUE_NAME),
-    addressConfigured: Boolean(process.env.NOCTURNE_VENUE_ADDRESS)
-  };
+  const venue = { nameConfigured: Boolean(process.env.NOCTURNE_VENUE_NAME), addressConfigured: Boolean(process.env.NOCTURNE_VENUE_ADDRESS) };
   venue.ready = venue.nameConfigured && venue.addressConfigured;
   const ticketing = {
     signingReady: dedicatedSecrets.ticketQr && dedicatedSecrets.ticketAccess,
@@ -340,66 +270,33 @@ function operationsStatus() {
     adminSessionReady: dedicatedSecrets.adminSession
   };
   const packages = {
-    drink: {
-      enabled: drink.enabled,
-      priceCents: drink.priceCents,
-      credits: drink.credits,
-      premiumUpgradeCents: drink.premiumUpgradeCents,
-      expected: drink.enabled && drink.priceCents === 5500 && drink.credits === 6 && drink.premiumUpgradeCents === 500
-    },
-    water: {
-      enabled: water.enabled,
-      priceCents: water.priceCents,
-      expected: water.enabled && water.priceCents === 1500
-    }
+    drink: { enabled: drink.enabled, priceCents: drink.priceCents, credits: drink.credits, premiumUpgradeCents: drink.premiumUpgradeCents, expected: drink.enabled && drink.priceCents === 5500 && drink.credits === 6 && drink.premiumUpgradeCents === 500 },
+    water: { enabled: water.enabled, priceCents: water.priceCents, expected: water.enabled && water.priceCents === 1500 }
   };
   packages.ready = packages.drink.expected && packages.water.expected;
   return {
-    turnstile,
-    venue,
-    ticketing,
-    packages,
-    inviteRemindersEnabled: inviteRemindersEnabled(),
-    inviteReminderSchedule: '9:00 AM HST daily',
-    purchaseRemindersEnabled: String(process.env.NOCTURNE_PURCHASE_REMINDERS_ENABLED || '').toLowerCase() === 'true'
-      && String(process.env.NOCTURNE_PURCHASE_REMINDERS_MODE || 'test').toLowerCase() === 'live',
-    purchaseReminderSchedule: '10:00 AM HST daily',
-    backupSchedule: '10:30 AM HST daily',
+    turnstile, venue, ticketing, packages,
+    inviteRemindersEnabled: inviteRemindersEnabled(), inviteReminderSchedule: '9:00 AM HST daily',
+    purchaseRemindersEnabled: String(process.env.NOCTURNE_PURCHASE_REMINDERS_ENABLED || '').toLowerCase() === 'true' && String(process.env.NOCTURNE_PURCHASE_REMINDERS_MODE || 'test').toLowerCase() === 'live',
+    purchaseReminderSchedule: '10:00 AM HST daily', backupSchedule: '10:30 AM HST daily',
     backupRetentionDays: Math.max(7, Math.min(Number(process.env.NOCTURNE_BACKUP_RETENTION_DAYS || 30), 365)),
     opsAlertsConfigured: Boolean((process.env.NOCTURNE_OPS_ALERT_TO || process.env.NOCTURNE_APPLICATION_NOTIFY_TO) && process.env.RESEND_API_KEY && process.env.NOCTURNE_EMAIL_FROM),
-    appleWallet: appleWalletStatus(),
-    appleWalletLaunchBlocking: false,
-    dedicatedSecrets,
-    dedicatedSecretsReady: Object.values(dedicatedSecrets).every(Boolean)
+    appleWallet: appleWalletStatus(), appleWalletLaunchBlocking: false,
+    dedicatedSecrets, dedicatedSecretsReady: Object.values(dedicatedSecrets).every(Boolean)
   };
 }
 
 async function backupStatus(retentionDays) {
-  const result = {
-    healthy: false,
-    latestKey: null,
-    lastSuccessfulAt: null,
-    ageHours: null,
-    recordCount: null,
-    retentionDays,
-    error: null
-  };
+  const result = { healthy: false, latestKey: null, lastSuccessfulAt: null, ageHours: null, recordCount: null, retentionDays, error: null };
   try {
     const store = getStore({ name: BACKUP_STORE, consistency: 'strong' });
     const { blobs } = await store.list();
-    const latest = blobs
-      .filter(({ key }) => /^daily-\d{4}-\d{2}-\d{2}$/.test(String(key)))
-      .sort((a, b) => String(b.key).localeCompare(String(a.key)))[0];
-    if (!latest) {
-      result.error = 'No completed daily backup exists yet.';
-      return result;
-    }
+    const latest = blobs.filter(({ key }) => /^daily-\d{4}-\d{2}-\d{2}$/.test(String(key))).sort((a, b) => String(b.key).localeCompare(String(a.key)))[0];
+    if (!latest) { result.error = 'No completed daily backup exists yet.'; return result; }
     const record = await store.get(latest.key, { type: 'json', consistency: 'strong' });
     result.latestKey = latest.key;
     result.lastSuccessfulAt = record?.createdAt || null;
-    result.recordCount = record?.counts
-      ? Object.values(record.counts).reduce((sum, count) => sum + Number(count || 0), 0)
-      : null;
+    result.recordCount = record?.counts ? Object.values(record.counts).reduce((sum, count) => sum + Number(count || 0), 0) : null;
     const created = new Date(result.lastSuccessfulAt || 0).getTime();
     if (Number.isFinite(created) && created > 0) {
       result.ageHours = Math.round(((Date.now() - created) / 3600000) * 10) / 10;
@@ -410,6 +307,28 @@ async function backupStatus(retentionDays) {
     result.error = String(error?.message || error).slice(0, 300);
   }
   return result;
+}
+
+async function rehearsalStatus(req) {
+  try {
+    const response = await adminRehearsal(req);
+    if (!response.ok) return { available: false, error: `Rehearsal status returned ${response.status}.` };
+    const data = await response.json();
+    const progress = data?.progress || {};
+    return {
+      available: true,
+      tester: data?.tester || '',
+      updatedAt: data?.updatedAt || null,
+      total: Number(progress.total || 0),
+      passed: Number(progress.passed || 0),
+      failed: Number(progress.failed || 0),
+      pending: Number(progress.pending || 0),
+      percent: Number(progress.percent || 0),
+      ready: Number(progress.failed || 0) === 0 && Number(progress.pending || 0) === 0 && Number(progress.total || 0) > 0
+    };
+  } catch (error) {
+    return { available: false, error: String(error?.message || error).slice(0, 300) };
+  }
 }
 
 function coreReadiness(stripe, email, operations, backup) {
@@ -434,22 +353,7 @@ function coreReadiness(stripe, email, operations, backup) {
 
 function withoutInviteFields(review = {}) {
   const next = { ...review };
-  for (const field of [
-    'inviteGeneratedAt',
-    'inviteExpiresAt',
-    'inviteHash',
-    'inviteState',
-    'inviteRevokedAt',
-    'inviteRedeemedAt',
-    'inviteEmailSentAt',
-    'inviteEmailMessageId',
-    'inviteEmailError',
-    'redemptionConfirmationStatus',
-    'redemptionConfirmationAttemptedAt',
-    'redemptionConfirmationSentAt',
-    'redemptionConfirmationMessageId',
-    'redemptionConfirmationError'
-  ]) delete next[field];
+  for (const field of ['inviteGeneratedAt','inviteExpiresAt','inviteHash','inviteState','inviteRevokedAt','inviteRedeemedAt','inviteEmailSentAt','inviteEmailMessageId','inviteEmailError','redemptionConfirmationStatus','redemptionConfirmationAttemptedAt','redemptionConfirmationSentAt','redemptionConfirmationMessageId','redemptionConfirmationError']) delete next[field];
   next.updatedAt = new Date().toISOString();
   return next;
 }
@@ -458,44 +362,25 @@ async function deleteStoreEntries(storeName) {
   const store = getStore({ name: storeName, consistency: 'strong' });
   const { blobs } = await store.list();
   let deleted = 0;
-  for (const { key } of blobs) {
-    await store.delete(key);
-    deleted += 1;
-  }
+  for (const { key } of blobs) { await store.delete(key); deleted += 1; }
   return deleted;
 }
 
 async function clearInvitations() {
   const inviteStore = getStore({ name: INVITE_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
-  const [{ blobs: inviteBlobs }, { blobs: reviewBlobs }] = await Promise.all([
-    inviteStore.list(),
-    reviewStore.list()
-  ]);
-
+  const [{ blobs: inviteBlobs }, { blobs: reviewBlobs }] = await Promise.all([inviteStore.list(), reviewStore.list()]);
   let deletedInviteBlobs = 0;
-  for (const { key } of inviteBlobs) {
-    await inviteStore.delete(key);
-    deletedInviteBlobs += 1;
-  }
-
+  for (const { key } of inviteBlobs) { await inviteStore.delete(key); deletedInviteBlobs += 1; }
   let reviewsReset = 0;
   for (const { key } of reviewBlobs) {
     const review = await reviewStore.get(key, { type: 'json', consistency: 'strong' });
     if (!review) continue;
-    const hasInviteData = Boolean(
-      review.inviteHash
-      || review.inviteState
-      || review.inviteGeneratedAt
-      || review.inviteRedeemedAt
-      || review.inviteRevokedAt
-      || review.redemptionConfirmationStatus
-    );
+    const hasInviteData = Boolean(review.inviteHash || review.inviteState || review.inviteGeneratedAt || review.inviteRedeemedAt || review.inviteRevokedAt || review.redemptionConfirmationStatus);
     if (!hasInviteData) continue;
     await reviewStore.setJSON(key, withoutInviteFields(review));
     reviewsReset += 1;
   }
-
   return { deletedInviteBlobs, reviewsReset };
 }
 
@@ -507,52 +392,30 @@ async function clearAllTestData() {
   const deletedDrinkRedemptions = await deleteStoreEntries(DRINK_REDEMPTION_STORE);
   const deletedReviews = await deleteStoreEntries(REVIEW_STORE);
   const deletedApplications = await deleteStoreEntries(APPLICATION_STORE);
-
-  return {
-    deletedApplications,
-    deletedReviews,
-    deletedInvites,
-    deletedOrders,
-    deletedStripeEvents,
-    deletedEmailEvents,
-    deletedDrinkRedemptions,
-    totalDeleted: deletedApplications + deletedReviews + deletedInvites + deletedOrders + deletedStripeEvents + deletedEmailEvents + deletedDrinkRedemptions
-  };
+  return { deletedApplications, deletedReviews, deletedInvites, deletedOrders, deletedStripeEvents, deletedEmailEvents, deletedDrinkRedemptions, totalDeleted: deletedApplications + deletedReviews + deletedInvites + deletedOrders + deletedStripeEvents + deletedEmailEvents + deletedDrinkRedemptions };
 }
 
 export default async (req) => {
   if (!authenticated(req)) return json({ error: 'Unauthorized.' }, 401);
-
   if (req.method === 'GET') {
     const [stripe, email] = await Promise.all([stripeStatus(), emailStatus()]);
     const operations = operationsStatus();
-    const backup = await backupStatus(operations.backupRetentionDays);
-    return json({ stripe, email, operations, backup, overall: coreReadiness(stripe, email, operations, backup) });
+    const [backup, rehearsal] = await Promise.all([backupStatus(operations.backupRetentionDays), rehearsalStatus(req)]);
+    return json({ stripe, email, operations, backup, rehearsal, overall: coreReadiness(stripe, email, operations, backup) });
   }
-
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (!allowedOrigin(req)) return json({ error: 'Origin not allowed.' }, 403);
-
   let body;
   try { body = await req.json(); } catch { return json({ error: 'Invalid request.' }, 400); }
-
   try {
     if (body?.action === 'clear-invitations') {
-      if (String(body?.confirm || '') !== 'CLEAR INVITATIONS') {
-        return json({ error: 'Confirmation phrase did not match.' }, 400);
-      }
-      const result = await clearInvitations();
-      return json({ ok: true, action: 'clear-invitations', ...result });
+      if (String(body?.confirm || '') !== 'CLEAR INVITATIONS') return json({ error: 'Confirmation phrase did not match.' }, 400);
+      return json({ ok: true, action: 'clear-invitations', ...await clearInvitations() });
     }
-
     if (body?.action === 'clear-all-test-data') {
-      if (String(body?.confirm || '') !== 'CLEAR ALL TEST DATA') {
-        return json({ error: 'Confirmation phrase did not match.' }, 400);
-      }
-      const result = await clearAllTestData();
-      return json({ ok: true, action: 'clear-all-test-data', ...result });
+      if (String(body?.confirm || '') !== 'CLEAR ALL TEST DATA') return json({ error: 'Confirmation phrase did not match.' }, 400);
+      return json({ ok: true, action: 'clear-all-test-data', ...await clearAllTestData() });
     }
-
     return json({ error: 'Unknown action.' }, 400);
   } catch (error) {
     console.error('NOCTURNE launch cleanup failed:', error);
