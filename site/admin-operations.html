@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#030303">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Live Festival Operations | NOCTURNE</title>
+  <link rel="icon" href="/assets/images/favicon.png">
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+  <link rel="stylesheet" href="/assets/css/admin-operations.css?v=20260825a">
+  <script src="/assets/js/admin-operations.js?v=20260825a" defer></script>
+</head>
+<body class="admin-body ops-body">
+  <header class="admin-topbar">
+    <a class="admin-brand" href="/admin" aria-label="NOCTURNE admin dashboard">
+      <img class="admin-brand-logo" src="/assets/images/nocturne-logo-wordmark.png" alt="NOCTURNE Festival" width="2048" height="745">
+    </a>
+    <div class="admin-top-actions">
+      <a href="/admin">Guest operations</a>
+      <a href="/check-in">Check-In ↗</a>
+      <a href="/bar">Bar Console ↗</a>
+    </div>
+  </header>
+
+  <main class="ops-shell">
+    <section class="ops-hero">
+      <div>
+        <p class="admin-kicker">NOCTURNE · Festival command</p>
+        <h1>Live operations.</h1>
+        <p>Attendance, admissions, package revenue, drink usage, bartender activity, and exceptions in one live view.</p>
+      </div>
+      <div class="ops-refresh-block">
+        <span id="ops-updated">Waiting for data…</span>
+        <button id="ops-refresh" class="admin-outline-button" type="button">Refresh now</button>
+        <label class="ops-auto"><input id="ops-auto-refresh" type="checkbox" checked> Auto-refresh every 30s</label>
+      </div>
+    </section>
+
+    <p id="ops-status" class="admin-status" role="status" aria-live="polite"></p>
+
+    <section class="ops-live-strip" aria-label="Live festival status">
+      <article><small>Current attendance</small><strong id="ops-live-attendance">0</strong><span id="ops-live-attendance-detail">0% of active admissions</span></article>
+      <article><small>Active wristbands</small><strong id="ops-live-wristbands">0</strong><span id="ops-live-wristband-detail">0 assigned total</span></article>
+      <article><small>Active water</small><strong id="ops-live-water">0</strong><span>Unlimited-water entitlements</span></article>
+      <article class="ops-alert-card"><small>Open exceptions</small><strong id="ops-live-exceptions">0</strong><span>Operational items to review</span></article>
+    </section>
+
+    <section class="ops-section" aria-labelledby="gate-title">
+      <div class="ops-section-head"><div><p class="admin-kicker">Gate dashboard</p><h2 id="gate-title">Admissions & attendance.</h2></div><div class="ops-money"><small>Net admission revenue</small><strong id="gate-net-revenue">$0.00</strong><span id="gate-gross-revenue">Gross $0.00</span></div></div>
+      <div class="ops-stat-grid ops-stat-grid-7">
+        <article><strong id="gate-tickets-sold">0</strong><small>Paid tickets sold</small></article>
+        <article><strong id="gate-comp-tickets">0</strong><small>Comp tickets</small></article>
+        <article><strong id="gate-active">0</strong><small>Active admissions</small></article>
+        <article><strong id="gate-checked-in">0</strong><small>Checked in</small></article>
+        <article><strong id="gate-waiting">0</strong><small>Not yet checked in</small></article>
+        <article><strong id="gate-refunds">$0.00</strong><small>Admission refunds</small></article>
+        <article><strong id="gate-attendance">0%</strong><small>Attendance rate</small></article>
+      </div>
+    </section>
+
+    <section class="ops-section" aria-labelledby="bar-revenue-title">
+      <div class="ops-section-head"><div><p class="admin-kicker">Bar revenue dashboard</p><h2 id="bar-revenue-title">Packages & consumption.</h2></div><div class="ops-money"><small>Total package revenue</small><strong id="bar-package-revenue">$0.00</strong><span id="bar-premium-revenue">Premium upgrades $0.00</span></div></div>
+      <div class="ops-stat-grid">
+        <article><strong id="bar-six-sold">0</strong><small>Six-drink packages</small></article>
+        <article><strong id="bar-water-sold">0</strong><small>Water packages</small></article>
+        <article><strong id="bar-credits-redeemed">0</strong><small>Credits redeemed</small></article>
+        <article><strong id="bar-credits-remaining">0</strong><small>Credits remaining</small></article>
+        <article><strong id="bar-average-used">0.0</strong><small>Avg credits used/package</small></article>
+        <article><strong id="bar-active-bands">0</strong><small>Active wristbands</small></article>
+      </div>
+      <div class="ops-drink-mix">
+        <div><span>Beer</span><strong id="bar-beer">0</strong></div>
+        <div><span>Well</span><strong id="bar-well">0</strong></div>
+        <div><span>Premium</span><strong id="bar-premium">0</strong></div>
+        <div><span>Non-alcoholic</span><strong id="bar-nonalcoholic">0</strong></div>
+      </div>
+    </section>
+
+    <div class="ops-two-column">
+      <section class="ops-section" aria-labelledby="bartenders-title">
+        <div class="ops-section-head compact"><div><p class="admin-kicker">Bar team</p><h2 id="bartenders-title">Bartender activity.</h2></div></div>
+        <div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Bartender</th><th>Redemptions</th><th>Premium</th><th>Upgrades</th><th>Last activity</th></tr></thead><tbody id="ops-bartenders"><tr><td colspan="5">No activity yet.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="ops-section" aria-labelledby="exceptions-title">
+        <div class="ops-section-head compact"><div><p class="admin-kicker">Exceptions</p><h2 id="exceptions-title">Needs attention.</h2></div></div>
+        <div id="ops-exceptions" class="ops-feed"><p class="ops-empty">No current exceptions.</p></div>
+      </section>
+    </div>
+
+    <div class="ops-two-column">
+      <section class="ops-section" aria-labelledby="checkins-title">
+        <div class="ops-section-head compact"><div><p class="admin-kicker">Entrance feed</p><h2 id="checkins-title">Recent check-ins.</h2></div></div>
+        <div id="ops-checkins" class="ops-feed"><p class="ops-empty">No check-ins yet.</p></div>
+      </section>
+
+      <section class="ops-section" aria-labelledby="redemptions-title">
+        <div class="ops-section-head compact"><div><p class="admin-kicker">Bar feed</p><h2 id="redemptions-title">Recent redemptions.</h2></div></div>
+        <div id="ops-redemptions" class="ops-feed"><p class="ops-empty">No drink redemptions yet.</p></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
