@@ -74,6 +74,7 @@ async function activate(inputData, staff) {
   const found = await resolvePackage(inputData.ticket);
   const serial = wristband(inputData.wristband);
   if (!found?.summary || found.summary.status !== 'paid' || !found.summary.drinkPackagePurchased) return json({ error: 'This ticket does not have an active drink package.' }, 404);
+  if (!found.summary.checkedInAt) return json({ error: 'Guest must complete event gate check-in before the Six-Drink Package can be activated.' }, 409);
   if (!serial || serial.length < 6) return json({ error: 'Scan or enter a wristband code with at least six characters.' }, 400);
   if (found.summary.drinkPackageStatus !== 'pending_activation') return json({ error: `Package is already ${found.summary.drinkPackageStatus || 'unavailable'}.` }, 409);
   const hash = wristbandHash(serial);
