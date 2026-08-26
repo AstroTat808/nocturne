@@ -16,6 +16,7 @@
 
   let latest = null;
   let saving = false;
+  let loadedForSession = false;
 
   async function request(options = {}) {
     const response = await fetch(API, {
@@ -128,6 +129,7 @@
       render(await request());
       setStatus('');
     } catch (error) {
+      if (/session expired/i.test(error.message || '')) loadedForSession = false;
       setStatus(error.message || 'Could not load rehearsal checklist.', true);
     }
   }
@@ -182,8 +184,23 @@
   });
 
   function boot() {
-    if (!ensureShell()) return setTimeout(boot, 100);
-    load();
+    const shell = ensureShell();
+    const dashboard = document.querySelector('#admin-dashboard');
+    if (!shell || !dashboard) return setTimeout(boot, 100);
+
+    const maybeLoad = () => {
+      if (dashboard.hidden) {
+        loadedForSession = false;
+        return;
+      }
+      if (!loadedForSession) {
+        loadedForSession = true;
+        load();
+      }
+    };
+
+    new MutationObserver(maybeLoad).observe(dashboard, { attributes: true, attributeFilter: ['hidden'] });
+    maybeLoad();
   }
   boot();
 })();
