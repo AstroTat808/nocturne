@@ -7,7 +7,9 @@
   const webhook = section.querySelector('#launch-stripe-webhook');
   const price = section.querySelector('#launch-stripe-price');
   const ready = section.querySelector('#launch-stripe-ready');
+  const readyDetail = section.querySelector('#launch-stripe-ready-detail');
   const emailDomain = section.querySelector('#launch-email-domain');
+  const emailDetail = section.querySelector('#launch-email-domain-detail');
   const reminders = section.querySelector('#launch-reminders');
   const backups = section.querySelector('#launch-backups');
   const secrets = section.querySelector('#launch-secrets');
@@ -23,6 +25,12 @@
     } catch {
       return `${String(currency || 'usd').toUpperCase()} ${(Number(cents || 0) / 100).toFixed(2)}`;
     }
+  }
+
+  function dateTime(value) {
+    if (!value) return 'unknown time';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
   }
 
   function text(el, value) {
@@ -45,7 +53,7 @@
 
   async function loadStripe() {
     refresh.disabled = true;
-    text(status, 'Checking Stripe configuration…');
+    text(status, 'Checking Stripe and Resend configuration…');
     try {
       const data = await request();
       const stripe = data.stripe || {};
@@ -55,15 +63,35 @@
       text(mode, displayedMode === 'live' ? 'LIVE' : displayedMode === 'test' ? 'TEST' : displayedMode.toUpperCase());
       text(webhook, stripe.webhookEndpointConfigured && stripe.webhookEventsConfigured && stripe.webhookSecretConfigured ? 'Configured' : 'Needs attention');
       text(price, money(stripe.priceCents, stripe.currency));
-      text(ready, stripe.readyForLive ? 'Ready for final live payment test' : 'Not live-ready');
+
+      if (stripe.readyForLive && stripe.livePaymentVerified) {
+        text(ready, 'LIVE VERIFIED');
+        const payment = stripe.livePayment || {};
+        const packageParts = [];
+        if (payment.drinkPackageIncluded) packageParts.push('Six-Drink');
+        if (payment.waterPackageIncluded) packageParts.push('Water');
+        text(readyDetail, `Successful live payment received · ${money(payment.amountTotal, payment.currency)} · ${dateTime(payment.receivedAt)}${packageParts.length ? ` · ${packageParts.join(' + ')}` : ''}`);
+      } else if (stripe.configurationReady) {
+        text(ready, 'Ready for final live payment test');
+        text(readyDetail, stripe.livePaymentCheckError ? `Payment evidence check error: ${stripe.livePaymentCheckError}` : 'Live Stripe configuration is complete, but no completed paid NOCTURNE admission checkout was found yet.');
+      } else {
+        text(ready, 'Not live-ready');
+        text(readyDetail, 'Stripe live configuration is incomplete.');
+      }
+
       text(emailDomain, email.sendingEnabled ? 'Verified' : email.configured ? (email.domainStatus || 'Needs attention') : 'Not configured');
+      text(emailDetail, email.diagnostic || 'No Resend diagnostic returned.');
       text(reminders, operations.purchaseRemindersEnabled ? 'Enabled' : 'Disabled');
       text(backups, operations.backupsEnabled ? `${operations.backupRetentionDays || 30} days` : 'Disabled');
       text(secrets, operations.dedicatedSecretsReady ? 'Separated' : 'Needs attention');
       text(appleWallet, operations.appleWallet?.configured ? 'Ready' : 'Needs certificate');
-      text(status, stripe.error ? `Stripe check: ${stripe.error}` : stripe.readyForLive ? 'Live configuration detected. Complete one small real payment before opening sales.' : 'Stripe is not fully live yet.');
+
+      if (stripe.error) text(status, `Stripe check: ${stripe.error}`);
+      else if (stripe.readyForLive) text(status, 'LIVE VERIFIED — Stripe configuration is complete and a successful live NOCTURNE admission payment was found.');
+      else if (stripe.configurationReady) text(status, 'Live Stripe configuration is complete. Waiting for successful live admission payment evidence.');
+      else text(status, 'Stripe is not fully live yet.');
     } catch (error) {
-      text(status, error.message || 'Stripe configuration could not be checked.');
+      text(status, error.message || 'Launch readiness could not be checked.');
     } finally {
       refresh.disabled = false;
     }
