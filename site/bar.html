@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/assets/css/check-in.css">
   <link rel="stylesheet" href="/assets/css/bar.css">
   <script src="/assets/vendor/html5-qrcode.min.js" defer></script>
-  <script src="/assets/js/bar.js?v=20260826-2" defer></script>
+  <script src="/assets/js/bar.js?v=20260826-3" defer></script>
 </head>
 <body class="checkin-body">
   <main class="checkin-shell">
@@ -30,7 +30,7 @@
     <section id="bar-console" class="checkin-panel checkin-console" hidden>
       <div class="checkin-head"><div><p class="section-kicker">NOCTURNE Bar</p><h1>Scan band.</h1><small id="bar-staff"></small></div><div class="checkin-head-actions"><a href="/admin">Admin</a><button id="bar-logout" class="checkin-text-button" type="button">Sign out</button></div></div>
       <div id="bar-scanner-frame" class="scanner-frame" data-mode="idle"><div id="bar-reader" class="checkin-reader" aria-label="QR camera scanner"></div><div class="scanner-target" aria-hidden="true"></div></div>
-      <div class="checkin-actions"><button id="bar-start-scanner" class="btn" type="button">Start Camera Scanner</button><button id="bar-stop-scanner" class="btn secondary" type="button" hidden>Stop Camera</button><button id="bar-scan-image" class="btn secondary" type="button">Scan QR From Photo</button><input id="bar-image-input" type="file" accept="image/*" hidden></div>
+      <div class="checkin-actions"><button id="bar-start-scanner" class="btn" type="button">Start Camera Scanner</button><button id="bar-stop-scanner" class="btn secondary" type="button" hidden>Stop Camera</button><button id="bar-scan-image" class="btn secondary" type="button">Scan QR From Photo</button><input id="bar-image-input" type="file" accept="image/*" capture="environment" hidden></div>
       <form id="bar-lookup-form" class="checkin-form manual-checkin-form"><label for="bar-code">Ticket URL/token or wristband QR</label><input id="bar-code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scan or enter code"><button class="btn secondary" type="submit">Look Up Package</button></form>
       <section id="bar-result" class="bar-result" data-state="idle" aria-live="polite"><strong>READY</strong><span>Scan a ticket to activate a wristband, or scan an active wristband to redeem.</span></section>
 
