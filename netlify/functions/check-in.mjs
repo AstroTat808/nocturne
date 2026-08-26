@@ -84,6 +84,21 @@ function tokenFromInput(value = '') {
   }
 }
 
+function entitlements(summary = {}) {
+  return {
+    drinkPackage: {
+      purchased: Boolean(summary.drinkPackagePurchased),
+      status: summary.drinkPackageStatus || null,
+      creditsPurchased: Number(summary.drinkCreditsPurchased || 0),
+      creditsRemaining: Number(summary.drinkCreditsRemaining || 0)
+    },
+    waterPackage: {
+      purchased: Boolean(summary.waterPackagePurchased),
+      status: summary.waterPackageStatus || null
+    }
+  };
+}
+
 async function checkIn(req, input) {
   const token = tokenFromInput(input.token || input.value || '');
   const parsed = verifyTicketToken(token);
@@ -110,7 +125,8 @@ async function checkIn(req, input) {
       message: 'ALREADY CHECKED IN',
       ticketId: parsed.ticketId,
       guestName,
-      checkedInAt: summary.checkedInAt
+      checkedInAt: summary.checkedInAt,
+      entitlements: entitlements(summary)
     });
   }
 
@@ -130,7 +146,8 @@ async function checkIn(req, input) {
       message: latest?.checkedInAt ? 'ALREADY CHECKED IN' : 'SCAN AGAIN',
       ticketId: parsed.ticketId,
       guestName,
-      checkedInAt: latest?.checkedInAt || null
+      checkedInAt: latest?.checkedInAt || null,
+      entitlements: entitlements(latest || summary)
     }, latest?.checkedInAt ? 200 : 409);
   }
 
@@ -147,7 +164,15 @@ async function checkIn(req, input) {
 
   await writeAudit('ticket.checked_in', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, guestName });
 
-  return json({ ok: true, result: 'valid', message: 'VALID — CHECKED IN', ticketId: parsed.ticketId, guestName, checkedInAt });
+  return json({
+    ok: true,
+    result: 'valid',
+    message: 'VALID — CHECKED IN',
+    ticketId: parsed.ticketId,
+    guestName,
+    checkedInAt,
+    entitlements: entitlements(summary)
+  });
 }
 
 export default async (req) => {
