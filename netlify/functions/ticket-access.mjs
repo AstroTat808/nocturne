@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { readTicketAccess } from './_ticket-auth.mjs';
 import { drinkPackageConfig } from './_drink-package.mjs';
+import { waterPackageConfig } from './_water-package.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 
@@ -29,6 +30,11 @@ function formattedPackagePrice() {
   return `$${amount.toFixed(0)}`;
 }
 
+function formattedWaterPrice() {
+  const amount = waterPackageConfig().priceCents / 100;
+  return `$${amount.toFixed(0)}`;
+}
+
 function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMessage = '' } = {}) {
   const configured = checkoutConfigured();
   const ticketName = escapeHtml(process.env.NOCTURNE_TICKET_NAME || 'NOCTURNE Festival — General Admission');
@@ -48,8 +54,9 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
   } else if (configured) {
     lead = 'Your invitation has been successfully redeemed. Your private ticket checkout is now available.';
     status = `<div class="private-access-status"><strong>${ticketName}</strong><br>${formattedPrice()} · One ticket per approved invitation</div>`;
-    const packageOption = drinkPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="drink_package" value="yes"><span><strong>I am 21+ — Add the Six-Drink Package · ${formattedPackagePrice()}</strong><small>Six credits for beer or well cocktails. Premium cocktails use one credit plus a $5 upgrade paid at the bar. Valid photo ID and event wristband required. Non-transferable; unused credits expire when event bar service ends. Service may be refused.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> The Six-Drink Package cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</small></span></label><label class="drink-package-option"><input type="checkbox" name="drink_package_policy" value="yes" disabled><span><strong>I understand this drink package is non-refundable.</strong><small>This acknowledgment is required before checkout when the Six-Drink Package is selected.</small></span></label>` : '';
-    actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-checkout">${packageOption}<div class="private-access-actions"><button class="btn" type="submit">Continue to Stripe →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></div></form>`;
+    const packageOption = drinkPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="drink_package" value="yes"><span><strong>I am 21+ — Add the Six-Drink Package · ${formattedPackagePrice()}</strong><small>Six credits for beer or well cocktails. Premium cocktails use one credit plus a $5 upgrade paid at the bar. Valid photo ID and event wristband required. Non-transferable; unused credits expire when event bar service ends. Service may be refused.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> The Six-Drink Package cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</small></span></label><label class="drink-package-option"><input type="checkbox" name="drink_package_policy" value="yes" disabled><span><strong>I understand the Six-Drink Package is non-refundable.</strong><small>This acknowledgment is required before checkout when the Six-Drink Package is selected.</small></span></label>` : '';
+    const waterOption = waterPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="water_package" value="yes"><span><strong>Add Unlimited Drinking Water · ${formattedWaterPrice()}</strong><small>Unlimited drinking-water service for the registered ticket holder throughout festival operating hours. One package per ticket. Personal and non-transferable.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> The Unlimited Drinking Water Package cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash.</small></span></label><label class="drink-package-option"><input type="checkbox" name="water_package_policy" value="yes" disabled><span><strong>I understand the Unlimited Drinking Water Package is non-refundable.</strong><small>This acknowledgment is required before checkout when Unlimited Drinking Water is selected.</small></span></label>` : '';
+    actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-checkout">${packageOption}${waterOption}<div class="private-access-actions"><button class="btn" type="submit">Continue to Stripe →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></div></form>`;
   } else {
     lead = 'Your invitation was successfully redeemed. The private ticket checkout is not live yet, so there is nothing else you need to do right now.';
     status = '<div class="private-access-status"><strong>Private ticket access is being prepared.</strong><br>Approved guests will receive the next instructions when checkout opens.</div>';
@@ -82,7 +89,7 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
       <p>${escapeHtml(lead)}</p>
       ${message}
       ${status}
-      <p>${paid ? 'Your purchase is recorded in the NOCTURNE guest system. Keep your confirmation email for your records.' : blocked ? 'A refunded or disputed payment cannot be replaced through the private checkout without administrative review.' : configured ? 'Checkout is processed securely by Stripe. Your approved invitation permits one ticket purchase and, if selected, one non-refundable drink package.' : 'Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.'}</p>
+      <p>${paid ? 'Your purchase is recorded in the NOCTURNE guest system. Keep your confirmation email for your records.' : blocked ? 'A refunded or disputed payment cannot be replaced through the private checkout without administrative review.' : configured ? 'Checkout is processed securely by Stripe. Your approved invitation permits one admission purchase plus any eligible optional packages you select below.' : 'Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.'}</p>
       ${actions}
     </section>
   </main>
