@@ -1,19 +1,23 @@
 (() => {
-  const STANDARD_REFUND_BUTTON = 'Refund & cancel ticket';
-  const LEGACY_COMBINED_BUTTON = 'Refund both in Stripe';
-  const COMBINED_REFUND_BUTTON = 'Refund admission + package';
-  const RECOVERY_REFUND_BUTTON = 'Complete admission refund';
-  const PACKAGE_ONLY_BUTTON = 'Refund drink package only';
-  const PACKAGE_LOCKED_BUTTON = 'Package non-refundable — drink redeemed';
   const DASHBOARD_API = '/api/admin/dashboard';
   const REFUND_API = '/.netlify/functions/admin-refunds';
+  const REFUND_BUTTONS = new Set(['Refund & cancel ticket', 'Complete admission refund']);
+  const REASONS = [
+    ['guest_request', 'Guest request'],
+    ['duplicate_purchase', 'Duplicate purchase'],
+    ['event_cancellation', 'Event cancellation'],
+    ['event_change', 'Material event change'],
+    ['payment_error', 'Payment / checkout error'],
+    ['goodwill', 'Administrative goodwill'],
+    ['other', 'Other']
+  ];
 
   let enhanceTimer = null;
   let enhancing = false;
 
   function panelField(panel, label) {
-    const cards = Array.from(panel.querySelectorAll('.admin-ticket-card'));
-    const card = cards.find((item) => item.querySelector('small')?.textContent?.trim() === label);
+    const card = Array.from(panel.querySelectorAll('.admin-ticket-card'))
+      .find((item) => item.querySelector('small')?.textContent?.trim() === label);
     return card?.querySelector('p, a')?.textContent?.trim() || '';
   }
 
@@ -69,61 +73,62 @@
     return clean;
   }
 
-  function unlockLegacyButtons(root = document) {
-    for (const button of root.querySelectorAll('button.admin-danger-button')) {
-      const label = button.textContent.trim();
-      const panel = button.closest('.admin-ticket-panel');
-      const packageState = panel ? panelField(panel, 'Drink package').toLowerCase() : '';
-      const packagePayment = panel ? panelField(panel, 'Package payment') : '';
-      if (label === LEGACY_COMBINED_BUTTON) {
-        button.textContent = COMBINED_REFUND_BUTTON;
-        button.disabled = false;
-        button.title = 'Refunds the separate drink-package charge first, then refunds admission. Both refunds are audited.';
-      } else if (label === STANDARD_REFUND_BUTTON && packageState.startsWith('refunded') && packagePayment && packagePayment !== 'Included with admission') {
-        button.textContent = RECOVERY_REFUND_BUTTON;
-        button.disabled = false;
-        button.title = 'The separate drink package is already refunded. This completes the remaining admission refund.';
-      }
-    }
+  function refundMeta(panel) {
+    const reason = panel.querySelector('[data-refund-reason]')?.value || '';
+    const notes = panel.querySelector('[data-refund-notes]')?.value?.trim() || '';
+    return { reason, notes };
   }
 
-  function removeGenerated(panel) {
-    panel.querySelectorAll('[data-refund-generated="true"]').forEach((node) => node.remove());
-  }
-
-  function makePackageButton(panel, application) {
-    const ticket = application?.ticket || {};
-    if (!ticket.drinkPackagePurchased || ticket.drinkPackagePurchaseType !== 'addon') return;
-    if (ticket.drinkPackageCheckoutStatus !== 'paid') return;
+  function renderRefundFields(panel) {
+    if (panel.querySelector('[data-refund-meta="true"]')) return;
     const actions = panel.querySelector('.admin-ticket-actions');
     if (!actions) return;
-    const redeemed = Number(ticket.drinkCreditsRedeemed || 0);
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'admin-danger-button';
-    button.dataset.refundGenerated = 'true';
-    button.dataset.refundSubmissionId = application.id;
-    button.dataset.refundAction = redeemed > 0 ? 'package-locked' : 'package-only';
-    button.textContent = redeemed > 0 ? PACKAGE_LOCKED_BUTTON : PACKAGE_ONLY_BUTTON;
-    if (redeemed > 0) {
-      button.disabled = true;
-      button.title = `${redeemed} drink credit${redeemed === 1 ? ' has' : 's have'} already been redeemed. The package is no longer refundable.`;
-    } else {
-      button.title = 'Refunds only the separate drink-package payment. Admission remains active.';
-    }
-    const status = actions.querySelector('.admin-status');
-    actions.insertBefore(button, status || actions.firstChild);
+
+    const box = document.createElement('section');
+    box.dataset.refundMeta = 'true';
+    box.style.cssText = 'margin:1rem 0;padding:1rem;border:1px solid rgba(216,154,43,.24);background:rgba(216,154,43,.035);text-align:left;';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Refund details';
+    title.style.cssText = 'margin:0 0 .75rem;font-size:.95rem;';
+    box.appendChild(title);
+
+    const reasonLabel = document.createElement('label');
+    reasonLabel.textContent = 'Reason';
+    reasonLabel.style.cssText = 'display:grid;gap:.4rem;color:#b9aa94;font-size:.72rem;';
+    const select = document.createElement('select');
+    select.dataset.refundReason = 'true';
+    select.required = true;
+    select.style.cssText = 'width:100%;min-height:44px;padding:.65rem .75rem;border:1px solid rgba(216,154,43,.28);background:#090806;color:#eee1ca;';
+    select.innerHTML = '<option value="">Choose a reason…</option>' + REASONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
+    reasonLabel.appendChild(select);
+    box.appendChild(reasonLabel);
+
+    const notesLabel = document.createElement('label');
+    notesLabel.textContent = 'Notes';
+    notesLabel.style.cssText = 'display:grid;gap:.4rem;margin-top:.75rem;color:#b9aa94;font-size:.72rem;';
+    const notes = document.createElement('textarea');
+    notes.dataset.refundNotes = 'true';
+    notes.rows = 3;
+    notes.maxLength = 1000;
+    notes.placeholder = 'Optional details, reference numbers, guest communication, or other context. Required when reason is Other.';
+    notes.style.cssText = 'width:100%;box-sizing:border-box;padding:.7rem .75rem;border:1px solid rgba(216,154,43,.28);background:#090806;color:#eee1ca;resize:vertical;line-height:1.45;';
+    notesLabel.appendChild(notes);
+    box.appendChild(notesLabel);
+
+    actions.before(box);
   }
 
   function renderHistory(panel, history = []) {
+    panel.querySelector('[data-refund-history="true"]')?.remove();
     const section = document.createElement('section');
-    section.dataset.refundGenerated = 'true';
-    section.className = 'admin-refund-history';
-    section.style.cssText = 'margin-top:1rem;padding:1rem;border:1px solid rgba(216,154,43,.24);background:rgba(216,154,43,.035);';
+    section.dataset.refundHistory = 'true';
+    section.style.cssText = 'margin-top:1rem;padding:1rem;border:1px solid rgba(216,154,43,.24);background:rgba(216,154,43,.035);text-align:left;';
     const title = document.createElement('h3');
     title.textContent = 'Refund history';
     title.style.cssText = 'margin:0 0 .75rem;font-size:.95rem;';
     section.appendChild(title);
+
     if (!history.length) {
       const empty = document.createElement('p');
       empty.textContent = 'No refunds recorded.';
@@ -132,16 +137,28 @@
       panel.appendChild(section);
       return;
     }
+
     for (const item of history) {
       const row = document.createElement('div');
-      row.style.cssText = 'padding:.8rem 0;border-top:1px solid rgba(216,154,43,.14);font-size:.76rem;line-height:1.55;';
+      row.style.cssText = 'padding:.85rem 0;border-top:1px solid rgba(216,154,43,.14);font-size:.76rem;line-height:1.55;';
       const heading = document.createElement('strong');
-      heading.textContent = `${item.label || (item.type === 'drink_package' ? 'Drink package refund' : 'Admission refund')} · ${money(item.amountCents, item.currency)}`;
+      heading.textContent = `${item.label || 'Admission refund'} · ${money(item.amountCents, item.currency)}`;
       row.appendChild(heading);
+
       const details = document.createElement('div');
       details.style.cssText = 'margin-top:.25rem;color:#a99b87;word-break:break-word;';
       details.textContent = `Status: ${item.status || '—'} · Date: ${dateTime(item.date)} · Stripe: ${item.stripeRefundId || '—'} · Initiated by: ${item.initiatedBy || '—'}`;
       row.appendChild(details);
+
+      const reason = document.createElement('div');
+      reason.style.cssText = 'margin-top:.3rem;color:#d5c2a4;';
+      reason.textContent = `Reason: ${item.reasonLabel || item.reason || 'Not recorded (legacy)'}`;
+      row.appendChild(reason);
+
+      const notes = document.createElement('div');
+      notes.style.cssText = 'margin-top:.2rem;color:#8f8372;white-space:pre-wrap;';
+      notes.textContent = `Notes: ${item.notes || '—'}`;
+      row.appendChild(notes);
       section.appendChild(row);
     }
     panel.appendChild(section);
@@ -150,19 +167,17 @@
   async function enhancePanel(panel) {
     const ticketId = panelField(panel, 'Ticket ID');
     if (!ticketId || ticketId === '—') return;
-    if (panel.dataset.refundEnhancedTicket === ticketId) return;
+    renderRefundFields(panel);
     const dashboard = await request(`${DASHBOARD_API}?action=applications`);
     const application = (dashboard.applications || []).find((item) => item.ticket?.ticketId === ticketId);
     if (!application) return;
-    removeGenerated(panel);
-    makePackageButton(panel, application);
+    panel.dataset.refundSubmissionId = application.id;
     try {
       const result = await request(`${REFUND_API}?submissionId=${encodeURIComponent(application.id)}`);
       renderHistory(panel, result.history || []);
     } catch {
       renderHistory(panel, []);
     }
-    panel.dataset.refundEnhancedTicket = ticketId;
   }
 
   function scheduleEnhance() {
@@ -172,31 +187,19 @@
       const panel = document.querySelector('#admin-detail .admin-ticket-panel');
       if (!panel) return;
       enhancing = true;
-      try {
-        unlockLegacyButtons(panel);
-        await enhancePanel(panel);
-      } catch (error) {
-        console.error('NOCTURNE refund panel enhancement failed:', error);
-      } finally {
-        enhancing = false;
-      }
+      try { await enhancePanel(panel); }
+      catch (error) { console.error('NOCTURNE refund panel enhancement failed:', error); }
+      finally { enhancing = false; }
     }, 80);
   }
 
-  unlockLegacyButtons();
   scheduleEnhance();
   const detail = document.querySelector('#admin-detail');
   if (detail) new MutationObserver(() => scheduleEnhance()).observe(detail, { childList: true, subtree: true });
 
   document.addEventListener('click', async (event) => {
     const button = event.target.closest('button.admin-danger-button');
-    if (!button) return;
-    const label = button.textContent.trim();
-    const isStandard = label === STANDARD_REFUND_BUTTON;
-    const isCombined = label === COMBINED_REFUND_BUTTON;
-    const isRecovery = label === RECOVERY_REFUND_BUTTON;
-    const isPackageOnly = label === PACKAGE_ONLY_BUTTON || button.dataset.refundAction === 'package-only';
-    if (!isStandard && !isCombined && !isRecovery && !isPackageOnly) return;
+    if (!button || !REFUND_BUTTONS.has(button.textContent.trim())) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -205,34 +208,19 @@
     if (!panel) return;
     const ticketId = panelField(panel, 'Ticket ID');
     const amount = panelField(panel, 'Amount');
-    const packagePayment = panelField(panel, 'Package payment');
     const guestName = document.querySelector('.admin-detail-head h2')?.textContent?.trim() || 'this guest';
+    const submissionId = panel.dataset.refundSubmissionId;
+    const meta = refundMeta(panel);
 
     if (!ticketId || ticketId === '—') return setPanelStatus(panel, 'Ticket ID is missing. Refund canceled.', true);
-    if (/^NOC-TKT-COMP-/.test(ticketId) && !isPackageOnly) return setPanelStatus(panel, 'Complimentary admission has no Stripe payment to refund.', true);
+    if (/^NOC-TKT-COMP-/.test(ticketId)) return setPanelStatus(panel, 'Complimentary admission has no Stripe payment to refund.', true);
+    if (!submissionId) return setPanelStatus(panel, 'Refund record is still loading. Wait a moment and try again.', true);
+    if (!meta.reason) return setPanelStatus(panel, 'Choose a refund reason before continuing.', true);
+    if (meta.reason === 'other' && meta.notes.length < 3) return setPanelStatus(panel, 'Enter notes when the refund reason is Other.', true);
 
-    const dashboard = await request(`${DASHBOARD_API}?action=applications`).catch((error) => {
-      setPanelStatus(panel, error.message || 'Could not verify the payment record.', true);
-      return null;
-    });
-    if (!dashboard) return;
-    const application = (dashboard.applications || []).find((item) => item.ticket?.ticketId === ticketId);
-    if (!application) return setPanelStatus(panel, 'The ticket record could not be located. Refresh and try again.', true);
-    const ticket = application.ticket || {};
-
-    if (isPackageOnly) {
-      if (ticket.drinkPackagePurchaseType !== 'addon' || ticket.drinkPackageCheckoutStatus !== 'paid') return setPanelStatus(panel, 'The separate drink package is not currently refundable.', true);
-      if (Number(ticket.drinkCreditsRedeemed || 0) > 0) return setPanelStatus(panel, 'Package refund blocked: at least one drink credit has already been redeemed.', true);
-    }
-
+    const reasonLabel = REASONS.find(([value]) => value === meta.reason)?.[1] || meta.reason;
     const firstConfirm = window.confirm(
-      isPackageOnly
-        ? `Refund ONLY ${guestName}'s separate drink package?\n\nTicket: ${ticketId}\nDrink package: ${packagePayment || 'Full package payment'}\n\nAdmission remains ACTIVE. The drink package will be permanently disabled. This is allowed only because zero drink credits have been redeemed.`
-        : isCombined
-          ? `Refund and cancel ${guestName}'s admission AND separate drink package?\n\nTicket: ${ticketId}\nAdmission: ${amount || 'Full admission payment'}\nDrink package: ${packagePayment || 'Full separate package payment'}\n\nThe package charge is refunded first. Admission is refunded second.`
-          : isRecovery
-            ? `Complete ${guestName}'s admission refund?\n\nTicket: ${ticketId}\nAdmission: ${amount || 'Full admission payment'}\n\nThe separate drink package is already refunded.`
-            : `Refund and cancel ${guestName}'s admission?\n\nTicket: ${ticketId}\nAmount: ${amount || 'Full admission payment'}\n\nThis submits a Stripe refund and invalidates admission.`
+      `Refund and cancel ${guestName}'s admission?\n\nTicket: ${ticketId}\nAdmission: ${amount || 'Eligible admission amount'}\nReason: ${reasonLabel}${meta.notes ? `\nNotes: ${meta.notes}` : ''}\n\nOnly the refundable admission portion will be sent to Stripe. Any drink-package charge remains non-refundable and its entitlement will be forfeited when admission is canceled.`
     );
     if (!firstConfirm) return;
 
@@ -242,37 +230,28 @@
 
     const initiatedBy = operatorName();
     if (!initiatedBy) return setPanelStatus(panel, 'Refund canceled. Enter a valid admin name or initials for the audit history.', true);
-
-    const finalConfirm = window.confirm(
-      isPackageOnly
-        ? `Final confirmation\n\nRefund the drink package for ${ticketId} now?\n\nAdmission will stay active. Any future drink-package redemption will be blocked.`
-        : isCombined
-          ? `Final confirmation\n\nSubmit BOTH Stripe refunds for ${ticketId} now?`
-          : `Final confirmation\n\nSubmit the admission refund for ${ticketId} now?`
-    );
-    if (!finalConfirm) return;
+    if (!window.confirm(`Final confirmation\n\nSubmit the admission-only Stripe refund for ${ticketId}?\nReason: ${reasonLabel}`)) return;
 
     button.disabled = true;
-    setPanelStatus(panel, 'Locking the current payment state and verifying refund eligibility…');
+    setPanelStatus(panel, 'Calculating the refundable admission amount and submitting to Stripe…');
 
     try {
-      const action = isPackageOnly ? 'package-only' : isCombined ? 'combined' : 'admission-only';
       const result = await request(REFUND_API, {
         method: 'POST',
-        body: JSON.stringify({ action, submissionId: application.id, confirmTicketId: ticketId, initiatedBy })
+        body: JSON.stringify({
+          action: 'admission-only',
+          submissionId,
+          confirmTicketId: ticketId,
+          initiatedBy,
+          refundReason: meta.reason,
+          refundNotes: meta.notes
+        })
       });
-      if (isPackageOnly) {
-        setPanelStatus(panel, `Drink package refunded: ${result.packageRefund?.id || 'recorded'}. Admission remains active.`);
-      } else if (isCombined) {
-        setPanelStatus(panel, `Refund workflow complete. Admission: ${result.admissionRefund?.id || 'recorded'} · Package: ${result.packageRefund?.id || 'recorded'}.`);
-      } else {
-        setPanelStatus(panel, `Admission refund submitted: ${result.admissionRefund?.id || 'recorded'}.`);
-      }
+      setPanelStatus(panel, `Admission refund submitted: ${result.admissionRefund?.id || 'recorded'} · ${result.refundReasonLabel || reasonLabel}.`);
       document.querySelector('#admin-refresh')?.click();
       setTimeout(scheduleEnhance, 300);
     } catch (error) {
-      if (error.data?.partial) setPanelStatus(panel, `${error.message} The package refund is recorded; admission remains active.`, true);
-      else setPanelStatus(panel, error.message || 'Refund could not be submitted.', true);
+      setPanelStatus(panel, error.message || 'Refund could not be submitted.', true);
       button.disabled = false;
     }
   }, true);
