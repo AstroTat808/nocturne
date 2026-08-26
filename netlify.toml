@@ -88,6 +88,18 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/operations"
+  to = "/.netlify/functions/admin-operations"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/rehearsal"
+  to = "/.netlify/functions/admin-rehearsal"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/comp-ticket"
   to = "/.netlify/functions/admin-comp-ticket"
   status = 200
