@@ -6,8 +6,9 @@ const ORDER_STORE = 'nocturne-ticket-orders';
 const REVIEW_STORE = 'nocturne-application-reviews';
 const POLICY_TEXT = 'FINAL SALE / NON-REFUNDABLE: NOCTURNE drink packages cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash, including unused or unredeemed benefits.';
 const POLICY_HTML = `<p style="margin:20px 0;color:#ffca61;font-size:12px;line-height:1.7"><strong>FINAL SALE / NON-REFUNDABLE:</strong> NOCTURNE drink packages cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash, including unused or unredeemed benefits.</p>`;
-const WATER_TEXT = 'Water package: Unlimited Drinking Water for the registered ticket holder during festival operating hours.';
+const WATER_TEXT = 'Water package: Unlimited Drinking Water · registered ticket holder only';
 const WATER_HTML = '<br><strong>Water package:</strong> Unlimited Drinking Water · registered ticket holder only';
+const PURCHASE_SUMMARY_HTML_MARKER = '<div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.8">';
 
 const DUPLICATE_REASONS = new Set(['duplicate', 'existing_active_ticket', 'concurrent_payment', 'existing_drink_package']);
 const PAYMENT_ERROR_REASONS = new Set(['amount_mismatch', 'drink_package_amount_mismatch', 'unrecognized_drink_package_checkout']);
@@ -20,16 +21,39 @@ function receiptNeedsPolicy(message, bundledWater = false) {
   return false;
 }
 
+function addWaterToTicketReceipt(message) {
+  let text = String(message?.text || '');
+  let html = String(message?.html || '');
+
+  if (!text.includes(WATER_TEXT)) {
+    const lines = text.split('\n');
+    const drinkIndex = lines.findIndex((line) => /^Drink package:/i.test(line));
+    const amountIndex = lines.findIndex((line) => /^Amount:/i.test(line));
+    const insertAfter = drinkIndex >= 0 ? drinkIndex : amountIndex;
+    if (insertAfter >= 0) lines.splice(insertAfter + 1, 0, WATER_TEXT);
+    else lines.push(WATER_TEXT);
+    text = lines.join('\n');
+  }
+
+  if (!html.includes('Water package:</strong>')) {
+    const summaryStart = html.indexOf(PURCHASE_SUMMARY_HTML_MARKER);
+    if (summaryStart >= 0) {
+      const summaryEnd = html.indexOf('</div>', summaryStart + PURCHASE_SUMMARY_HTML_MARKER.length);
+      if (summaryEnd >= 0) html = `${html.slice(0, summaryEnd)}${WATER_HTML}${html.slice(summaryEnd)}`;
+    }
+  }
+
+  return { ...message, text, html };
+}
+
 function addPolicy(message, bundledWater = false) {
   if (!receiptNeedsPolicy(message, bundledWater)) return message;
-  let text = String(message.text || '');
-  let html = String(message.html || '');
-  if (bundledWater && message?.subject === 'Your NOCTURNE Ticket Is Confirmed') {
-    if (!text.includes(WATER_TEXT)) text = `${text}\n${WATER_TEXT}`;
-    if (!html.includes('Water package:')) html = html.replace('</div>', `${WATER_HTML}</div>`);
-  }
+  let next = message;
+  if (bundledWater && message?.subject === 'Your NOCTURNE Ticket Is Confirmed') next = addWaterToTicketReceipt(next);
+  const text = String(next.text || '');
+  const html = String(next.html || '');
   return {
-    ...message,
+    ...next,
     text: text.includes('FINAL SALE / NON-REFUNDABLE') ? text : `${text}\n\n${POLICY_TEXT}`,
     html: html.includes('FINAL SALE / NON-REFUNDABLE') ? html : html.replace('</div></div></body></html>', `${POLICY_HTML}</div></div></body></html>`)
   };
