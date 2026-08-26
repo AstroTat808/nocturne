@@ -1,5 +1,5 @@
 (() => {
-  const API = '/api/admin/operations';
+  const API = '/.netlify/functions/admin-operations';
   const money = (cents) => {
     try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(cents || 0) / 100); }
     catch { return `$${(Number(cents || 0) / 100).toFixed(2)}`; }
