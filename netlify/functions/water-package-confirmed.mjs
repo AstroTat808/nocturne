@@ -12,7 +12,7 @@ function page({ confirmed = false, pending = false, cancelled = false, message =
   const kicker = confirmed ? 'Water Package Confirmed' : pending ? 'Finalizing Purchase' : cancelled ? 'Checkout Canceled' : 'Water Package Status';
   const heading = confirmed ? 'Unlimited water is active.' : pending ? 'Payment is being verified.' : cancelled ? 'No charge was made.' : 'We could not confirm that package.';
   const status = confirmed
-    ? `<div class="private-access-status"><strong>Unlimited Drinking Water Added</strong>${amount ? `<br>${escapeHtml(amount)}` : ''}</div>`
+    ? `<div class="private-access-status"><strong>Unlimited Drinking Water Added</strong>${amount ? `<br>${escapeHtml(amount)}` : ''}</div><div class="private-access-status"><strong>FINAL SALE / NON-REFUNDABLE</strong><br>This package cannot be refunded, exchanged, prorated, transferred, or converted to cash.</div>`
     : pending
       ? '<div class="private-access-status"><strong>Finalizing your water package…</strong><br>This page will refresh automatically.</div>'
       : cancelled
@@ -34,25 +34,17 @@ export default async (req) => {
   const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive', 'Referrer-Policy': 'no-referrer' };
   if (url.searchParams.get('cancelled') === '1') return new Response(page({ cancelled: true }), { status: 200, headers });
   if (url.searchParams.has('error')) return new Response(page({ message: url.searchParams.get('error') }), { status: 400, headers });
-
   const sessionId = String(url.searchParams.get('session_id') || '').trim();
   if (!/^cs_(test_|live_)?[A-Za-z0-9_]{10,}$/.test(sessionId)) return new Response(page({ message: 'The checkout session ID is missing or invalid.' }), { status: 400, headers });
-
   const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
   const checkoutOrder = await orderStore.get(sessionId, { type: 'json', consistency: 'strong' });
-  if (!checkoutOrder || checkoutOrder.purchaseType !== 'water-package-addon' || !checkoutOrder.submissionId) {
-    return new Response(page({ pending: true }), { status: 202, headers });
-  }
-
+  if (!checkoutOrder || checkoutOrder.purchaseType !== 'water-package-addon' || !checkoutOrder.submissionId) return new Response(page({ pending: true }), { status: 202, headers });
   const summaryEntry = await orderStore.getWithMetadata(`submission-${checkoutOrder.submissionId}`, { type: 'json', consistency: 'strong' });
   const summary = await reconcileWaterPackageCheckout({ summaryEntry, orderStore, reviewStore });
   if (summary?.waterPackagePurchased && summary.waterPackageCheckoutSessionId === sessionId) {
-    const amount = Number.isFinite(Number(summary.waterPackagePriceCents))
-      ? `${String(checkoutOrder.currency || 'usd').toUpperCase()} ${(Number(summary.waterPackagePriceCents) / 100).toFixed(2)}`
-      : '';
+    const amount = Number.isFinite(Number(summary.waterPackagePriceCents)) ? `${String(checkoutOrder.currency || 'usd').toUpperCase()} ${(Number(summary.waterPackagePriceCents) / 100).toFixed(2)}` : '';
     return new Response(page({ confirmed: true, amount }), { status: 200, headers });
   }
-
   return new Response(page({ pending: true }), { status: 202, headers });
 };
