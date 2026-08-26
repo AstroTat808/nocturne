@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { writeAudit } from './_audit.mjs';
+import adminRefundsCore from './admin-refunds-core.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -108,7 +109,7 @@ async function sendEmail(application, summary, refund, amount, packageForfeited)
   const currency = String(refund.currency || summary.currency || 'usd').toUpperCase();
   const formatted = `${currency} ${(amount / 100).toFixed(2)}`;
   const packageCopy = packageForfeited
-    ? 'Your Six-Drink Package was not refunded. Drink packages are FINAL SALE / NON-REFUNDABLE. Because the admission ticket is canceled, the attached package is forfeited and can no longer be redeemed.'
+    ? 'Your drink package was not refunded. All NOCTURNE drink packages, including the Six-Drink Package and Unlimited Drinking Water Package, are FINAL SALE / NON-REFUNDABLE. Because the admission ticket is canceled, any attached package is forfeited and can no longer be redeemed.'
     : 'No drink-package charge was included in this refund.';
   const text = [`${name},`, '', 'Your NOCTURNE admission has been canceled and the refundable admission portion has been submitted to Stripe.', '', `Ticket ID: ${summary.ticketId}`, `Admission refund: ${formatted}`, packageCopy, '', 'Bank posting times vary by payment method.', '', 'NOCTURNE Festival', 'Presented by Wild Ones · Hawai‘i'].join('\n');
   const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Admission Refund</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:42px;line-height:1.04;color:#fff3df">Admission refunded.</h1><p style="color:#c8baa4;line-height:1.7">${escapeHtml(name)}, the refundable admission portion of your purchase has been submitted to Stripe.</p><div style="padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.8"><strong>Ticket ID:</strong> ${escapeHtml(summary.ticketId)}<br><strong>Admission refund:</strong> ${escapeHtml(formatted)}</div><p style="color:#ffca61;line-height:1.7"><strong>Drink-package policy:</strong> ${escapeHtml(packageCopy)}</p><p style="color:#9d907f;line-height:1.7">Bank posting times vary by payment method.</p></div></div></body></html>`;
@@ -123,6 +124,7 @@ async function sendEmail(application, summary, refund, amount, packageForfeited)
 }
 
 export default async (req) => {
+  if (req.method === 'GET') return adminRefundsCore(req);
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (!authenticated(req)) return json({ error: 'Admin session expired. Sign in again.' }, 401);
   if (!allowedOrigin(req)) return json({ error: 'Request origin was not allowed.' }, 403);
@@ -158,6 +160,7 @@ export default async (req) => {
   const amount = refundableAdmissionCents(summary);
   if (amount < 50) return json({ error: 'The refundable admission amount could not be calculated safely.' }, 409);
   const packageBundled = Boolean(summary.drinkPackagePurchased && summary.drinkPackagePurchaseType !== 'addon');
+  const packageAttached = Boolean(summary.drinkPackagePurchased || summary.waterPackagePurchased);
 
   let refund;
   try {
@@ -170,24 +173,32 @@ export default async (req) => {
   const now = new Date().toISOString();
   const history = Array.isArray(summary.refundHistory) ? summary.refundHistory.filter(Boolean) : [];
   history.push({ id: `refund-${refund.id}`, type: 'admission', label: 'Admission refund', amountCents: amount, currency: refund.currency || summary.currency || 'usd', stripeRefundId: refund.id, paymentIntentId: summary.stripePaymentIntentId, date: now, status: refund.status || 'submitted', initiatedBy, source: 'admin_dashboard', action: 'admission-only' });
-  const packagePatch = packageBundled ? {
-    drinkPackageStatus: 'forfeited',
-    drinkPackageInvalidatedAt: now,
-    drinkPackageInvalidationReason: 'admission_refunded_nonrefundable',
-    drinkCreditsRemainingBeforeInvalidation: Number(summary.drinkCreditsRemaining || 0),
-    drinkCreditsRemaining: 0
+  const packagePatch = packageAttached ? {
+    ...(summary.drinkPackagePurchased ? {
+      drinkPackageStatus: 'forfeited',
+      drinkPackageInvalidatedAt: now,
+      drinkPackageInvalidationReason: 'admission_refunded_nonrefundable',
+      drinkCreditsRemainingBeforeInvalidation: Number(summary.drinkCreditsRemaining || 0),
+      drinkCreditsRemaining: 0
+    } : {}),
+    ...(summary.waterPackagePurchased ? {
+      waterPackageStatus: 'forfeited',
+      waterPackageInvalidatedAt: now,
+      waterPackageInvalidationReason: 'admission_refunded_nonrefundable'
+    } : {})
   } : {};
   const next = { ...summary, ...packagePatch, status: 'refunded', stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundedAt: now, refundedAmount: amount, refundInitiatedBy: initiatedBy, refundHistory: history, updatedAt: now };
 
-  await orderStore.setJSON(summaryKey, next, { onlyIfMatch: summaryEntry.etag });
+  const write = await orderStore.setJSON(summaryKey, next, { onlyIfMatch: summaryEntry.etag });
+  if (!write.modified) return json({ error: 'Ticket status changed while the refund was being recorded. Verify Stripe before retrying.' }, 409);
   if (summary.stripeCheckoutSessionId) {
     const order = await orderStore.get(summary.stripeCheckoutSessionId, { type: 'json', consistency: 'strong' });
     if (order) await orderStore.setJSON(summary.stripeCheckoutSessionId, { ...order, ...packagePatch, status: 'refunded', stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundedAt: now, refundedAmount: amount, refundHistory: history, updatedAt: now });
   }
   if (review) await reviewStore.setJSON(submissionId, { ...review, ...packagePatch, ticketState: 'refunded', ticketRefundedAt: now, stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundInitiatedBy: initiatedBy, refundHistory: history, updatedAt: now });
 
-  const email = await sendEmail(application, next, refund, amount, packageBundled).catch((error) => ({ status: 'failed', error: String(error?.message || error) }));
-  await writeAudit('ticket.admin_admission_partial_refunded', { submissionId, ticketId: summary.ticketId, stripePaymentIntentId: summary.stripePaymentIntentId, stripeRefundId: refund.id, amount, packageBundled, packageRefunded: false, packageForfeited: packageBundled, initiatedBy, emailStatus: email.status });
+  const email = await sendEmail(application, next, refund, amount, packageAttached).catch((error) => ({ status: 'failed', error: String(error?.message || error) }));
+  await writeAudit('ticket.admin_admission_partial_refunded', { submissionId, ticketId: summary.ticketId, stripePaymentIntentId: summary.stripePaymentIntentId, stripeRefundId: refund.id, amount, packageBundled, packageAttached, packageRefunded: false, packageForfeited: packageAttached, initiatedBy, emailStatus: email.status });
 
-  return json({ ok: true, action: 'admission-only', ticketId: summary.ticketId, admissionRefund: { id: refund.id, status: refund.status || 'submitted', amount, currency: refund.currency || summary.currency || 'usd' }, drinkPackageRefunded: false, drinkPackageForfeited: packageBundled, refundEmailStatus: email.status });
+  return json({ ok: true, action: 'admission-only', ticketId: summary.ticketId, admissionRefund: { id: refund.id, status: refund.status || 'submitted', amount, currency: refund.currency || summary.currency || 'usd' }, drinkPackageRefunded: false, drinkPackageForfeited: Boolean(summary.drinkPackagePurchased), waterPackageRefunded: false, waterPackageForfeited: Boolean(summary.waterPackagePurchased), refundEmailStatus: email.status });
 };
