@@ -1,25 +1,33 @@
 import { getStore } from '@netlify/blobs';
 import stripeWebhookCore from './stripe-webhook-core.mjs';
+import { writeAudit } from './_audit.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
+const REVIEW_STORE = 'nocturne-application-reviews';
 const POLICY_TEXT = 'FINAL SALE / NON-REFUNDABLE: NOCTURNE drink packages cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash, including unused or unredeemed benefits.';
 const POLICY_HTML = `<p style="margin:20px 0;color:#ffca61;font-size:12px;line-height:1.7"><strong>FINAL SALE / NON-REFUNDABLE:</strong> NOCTURNE drink packages cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash, including unused or unredeemed benefits.</p>`;
+const WATER_TEXT = 'Water package: Unlimited Drinking Water for the registered ticket holder during festival operating hours.';
+const WATER_HTML = '<br><strong>Water package:</strong> Unlimited Drinking Water · registered ticket holder only';
 
 const DUPLICATE_REASONS = new Set(['duplicate', 'existing_active_ticket', 'concurrent_payment', 'existing_drink_package']);
 const PAYMENT_ERROR_REASONS = new Set(['amount_mismatch', 'drink_package_amount_mismatch', 'unrecognized_drink_package_checkout']);
 
-function receiptNeedsPolicy(message) {
+function receiptNeedsPolicy(message, bundledWater = false) {
   const subject = String(message?.subject || '');
   const text = String(message?.text || '');
   if (subject === 'Your NOCTURNE Drink Package Is Confirmed') return true;
-  if (subject === 'Your NOCTURNE Ticket Is Confirmed' && /Drink package:/i.test(text)) return true;
+  if (subject === 'Your NOCTURNE Ticket Is Confirmed' && (/Drink package:/i.test(text) || bundledWater)) return true;
   return false;
 }
 
-function addPolicy(message) {
-  if (!receiptNeedsPolicy(message)) return message;
-  const text = String(message.text || '');
-  const html = String(message.html || '');
+function addPolicy(message, bundledWater = false) {
+  if (!receiptNeedsPolicy(message, bundledWater)) return message;
+  let text = String(message.text || '');
+  let html = String(message.html || '');
+  if (bundledWater && message?.subject === 'Your NOCTURNE Ticket Is Confirmed') {
+    if (!text.includes(WATER_TEXT)) text = `${text}\n${WATER_TEXT}`;
+    if (!html.includes('Water package:')) html = html.replace('</div>', `${WATER_HTML}</div>`);
+  }
   return {
     ...message,
     text: text.includes('FINAL SALE / NON-REFUNDABLE') ? text : `${text}\n\n${POLICY_TEXT}`,
@@ -70,7 +78,65 @@ async function recordAutomaticRefund(params, refund) {
   }
 }
 
+function bundledWaterEvent(event) {
+  const session = event?.data?.object || {};
+  return Boolean(
+    ['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(String(event?.type || ''))
+    && session?.payment_status === 'paid'
+    && String(session?.metadata?.purchaseType || '') !== 'water-package-addon'
+    && String(session?.metadata?.waterPackage || '') === 'unlimited'
+  );
+}
+
+async function fulfillBundledWater(event) {
+  if (!bundledWaterEvent(event)) return;
+  const session = event.data.object;
+  const submissionId = String(session.client_reference_id || session.metadata?.submissionId || '').trim();
+  if (!submissionId || !session.id) return;
+  const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
+  const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
+  const sessionOrder = await orderStore.get(session.id, { type: 'json', consistency: 'strong' });
+  if (!sessionOrder || sessionOrder.status !== 'paid' || !sessionOrder.waterPackageRequested) return;
+  const paidAt = sessionOrder.paidAt || new Date().toISOString();
+  const fields = {
+    waterPackageRequested: true,
+    waterPackagePolicyAccepted: true,
+    waterPackagePurchased: true,
+    waterPackageStatus: 'active',
+    waterPackagePriceCents: Number(sessionOrder.waterPackagePriceCents || 1500),
+    waterPackagePurchaseType: 'bundled',
+    waterPackageCheckoutStatus: 'paid',
+    waterPackageCheckoutSessionId: session.id,
+    waterPackagePaymentIntentId: session.payment_intent || sessionOrder.stripePaymentIntentId || null,
+    waterPackagePaidAt: paidAt,
+    waterPackageCheckoutUrl: null,
+    waterPackageCheckoutExpiresAt: null,
+    waterPackageInvalidatedAt: null,
+    waterPackageInvalidationReason: null
+  };
+
+  await orderStore.setJSON(session.id, { ...sessionOrder, ...fields, updatedAt: new Date().toISOString() });
+  const summaryKey = `submission-${submissionId}`;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const entry = await orderStore.getWithMetadata(summaryKey, { type: 'json', consistency: 'strong' });
+    if (!entry?.data || entry.data.stripeCheckoutSessionId !== session.id || entry.data.status !== 'paid') break;
+    if (entry.data.waterPackagePurchased) break;
+    const write = await orderStore.setJSON(summaryKey, { ...entry.data, ...fields, updatedAt: new Date().toISOString() }, { onlyIfMatch: entry.etag });
+    if (write.modified) break;
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const entry = await reviewStore.getWithMetadata(submissionId, { type: 'json', consistency: 'strong' });
+    if (!entry?.data) break;
+    const write = await reviewStore.setJSON(submissionId, { ...entry.data, ...fields, updatedAt: new Date().toISOString() }, { onlyIfMatch: entry.etag });
+    if (write.modified) break;
+  }
+  await writeAudit('water_package.paid', { submissionId, ticketId: sessionOrder.ticketId || null, stripeCheckoutSessionId: session.id, stripePaymentIntentId: session.payment_intent || null, amountTotal: Number(sessionOrder.waterPackagePriceCents || 1500), purchaseType: 'bundled' });
+}
+
 export default async (req) => {
+  let event = null;
+  try { event = JSON.parse(await req.clone().text()); } catch {}
+  const bundledWater = bundledWaterEvent(event);
   const priorFetch = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
     const url = typeof input === 'string' ? input : input?.url || '';
@@ -78,7 +144,7 @@ export default async (req) => {
     if (url === 'https://api.resend.com/emails' && typeof init?.body === 'string') {
       try {
         const message = JSON.parse(init.body);
-        const next = addPolicy(message);
+        const next = addPolicy(message, bundledWater);
         if (next !== message || next.text !== message.text || next.html !== message.html) init = { ...init, body: JSON.stringify(next) };
       } catch {}
     }
@@ -100,7 +166,12 @@ export default async (req) => {
   };
 
   try {
-    return await stripeWebhookCore(req);
+    const response = await stripeWebhookCore(req);
+    if (response.ok && bundledWater) {
+      try { await fulfillBundledWater(event); }
+      catch (error) { console.error('NOCTURNE bundled water fulfillment failed:', error); }
+    }
+    return response;
   } finally {
     globalThis.fetch = priorFetch;
   }
