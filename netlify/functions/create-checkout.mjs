@@ -176,8 +176,8 @@ export default async (req) => {
     params['line_items[1][quantity]'] = '1';
     params['line_items[1][price_data][currency]'] = currency;
     params['line_items[1][price_data][unit_amount]'] = String(packageConfig.priceCents);
-    params['line_items[1][price_data][product_data][name]'] = 'NOCTURNE Six-Drink Package';
-    params['line_items[1][price_data][product_data][description]'] = 'Six prepaid bar credits. Beer or well cocktail per credit; premium cocktails require a $5 upgrade at the bar. 21+ ID required.';
+    params['line_items[1][price_data][product_data][name]'] = 'NOCTURNE Six-Drink Package — NON-REFUNDABLE';
+    params['line_items[1][price_data][product_data][description]'] = 'FINAL SALE / NON-REFUNDABLE. Six prepaid bar credits. Beer or well cocktail per credit; premium cocktails require a $5 upgrade at the bar. 21+ ID required. Unused credits are not refundable, exchangeable, transferable, or redeemable for cash.';
   }
 
   if (application.email) params.customer_email = application.email;
