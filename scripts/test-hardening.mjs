@@ -4,6 +4,7 @@ import { beforeEvent, eligibleForPurchaseReminder, eligibleForPurchaseReminderTe
 import { verifyStripeSignature } from '../netlify/functions/_stripe-signature.mjs';
 import { drinkPackageAddonEligible, drinkPackageAddonFields, drinkPackageConfig, drinkPackageRequested, initialDrinkPackageFields, invalidateDrinkPackage } from '../netlify/functions/_drink-package.mjs';
 import { appleWalletConfigured, appleWalletStatus, buildAppleWalletPass } from '../netlify/functions/_apple-wallet.mjs';
+import { makeAccessCookie } from '../netlify/functions/_ticket-auth.mjs';
 
 const now = new Date('2026-08-24T20:00:00.000Z').getTime();
 const redeemed = { status: 'approved', inviteState: 'redeemed', inviteRedeemedAt: new Date(now - 21 * 3600000).toISOString() };
@@ -16,6 +17,9 @@ assert.equal(eligibleForPurchaseReminder(redeemed, { status: 'refunded' }, now),
 assert.equal(honoluluDate(new Date('2026-08-25T05:00:00.000Z')), '2026-08-24');
 assert.equal(beforeEvent(new Date('2026-09-06T20:00:00.000Z').getTime()), true);
 assert.equal(beforeEvent(new Date('2026-09-07T02:00:00.000Z').getTime()), false);
+
+process.env.NOCTURNE_TICKET_ACCESS_SECRET = 'test-ticket-access-secret';
+assert.match(makeAccessCookie('test-token', 3600), /SameSite=Lax/, 'ticket access cookie must survive Stripe top-level return navigation');
 
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_hardening';
 const body = JSON.stringify({ id: 'evt_test_123', type: 'checkout.session.completed' });
