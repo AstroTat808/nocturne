@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/admin.css">
   <link rel="stylesheet" href="/assets/css/admin-tickets.css">
-  <script src="/assets/js/admin-launch.js?v=20260826e" defer></script>
+  <script src="/assets/js/admin-launch.js?v=20260826f" defer></script>
 </head>
 <body class="admin-body">
   <header class="admin-topbar">
@@ -27,33 +27,69 @@
         <div>
           <p class="admin-kicker">Go-live controls</p>
           <h1>Launch readiness.</h1>
-          <p class="admin-muted">Verify the deployed Stripe mode, successful live payment evidence, email sending readiness, and final pre-launch cleanup state before opening NOCTURNE to real applicants.</p>
+          <p class="admin-muted">One production view for payments, fulfillment, security, ticket operations, packages, reminders, backups, and rehearsal status.</p>
         </div>
+        <button id="launch-refresh-stripe" class="admin-outline-button" type="button">Refresh Readiness</button>
       </div>
+
+      <section class="admin-review-panel" style="margin-top:20px;border-color:rgba(216,154,43,.42)">
+        <p class="admin-kicker">Overall verdict</p>
+        <h2 id="launch-overall">Checking production systems…</h2>
+        <p id="launch-overall-detail" class="admin-muted">Evaluating launch blockers and rehearsal status.</p>
+      </section>
 
       <section class="admin-ticket-overview" aria-labelledby="stripe-launch-title">
         <div class="admin-ticket-overview-head">
-          <div><p class="admin-kicker">Payments</p><h2 id="stripe-launch-title">Stripe deployment.</h2></div>
-          <button id="launch-refresh-stripe" class="admin-outline-button" type="button">Check Stripe</button>
+          <div><p class="admin-kicker">Payments & fulfillment</p><h2 id="stripe-launch-title">Stripe deployment.</h2></div>
         </div>
         <div class="admin-ticket-stats">
           <div class="admin-ticket-stat"><span id="launch-stripe-mode">—</span><small>Mode</small><em>Must show LIVE</em></div>
           <div class="admin-ticket-stat"><span id="launch-stripe-webhook">—</span><small>Webhook</small><em>Live destination + required events</em></div>
           <div class="admin-ticket-stat"><span id="launch-stripe-price">—</span><small>Ticket price</small><em>Configured admission amount</em></div>
-          <div class="admin-ticket-stat"><span id="launch-stripe-ready">—</span><small>Readiness</small><em id="launch-stripe-ready-detail">Checking live-payment evidence…</em></div>
+          <div class="admin-ticket-stat"><span id="launch-stripe-ready">—</span><small>Live payment</small><em id="launch-stripe-ready-detail">Checking payment evidence…</em></div>
+          <div class="admin-ticket-stat"><span id="launch-fulfillment">—</span><small>Webhook fulfillment</small><em id="launch-fulfillment-detail">Checking ticket issuance evidence…</em></div>
+        </div>
+      </section>
+
+      <section class="admin-ticket-overview" aria-labelledby="runtime-launch-title">
+        <div class="admin-ticket-overview-head">
+          <div><p class="admin-kicker">Critical runtime</p><h2 id="runtime-launch-title">Protection & event access.</h2></div>
+        </div>
+        <div class="admin-ticket-stats">
+          <div class="admin-ticket-stat"><span id="launch-turnstile">—</span><small>Application protection</small><em>Cloudflare Turnstile site + secret keys</em></div>
+          <div class="admin-ticket-stat"><span id="launch-venue">—</span><small>Private venue runtime</small><em>Name + address remain server-side</em></div>
+          <div class="admin-ticket-stat"><span id="launch-ticket-signing">—</span><small>Digital ticket signing</small><em>QR + private-access signing secrets</em></div>
+          <div class="admin-ticket-stat"><span id="launch-gate">—</span><small>Gate scanner</small><em>Dedicated key + session secret</em></div>
+          <div class="admin-ticket-stat"><span id="launch-bar">—</span><small>Bar console</small><em>Dedicated key + session secret</em></div>
+          <div class="admin-ticket-stat"><span id="launch-secrets">—</span><small>Secret separation</small><em>Dedicated admin/ticket/gate/bar secrets</em></div>
         </div>
       </section>
 
       <section class="admin-ticket-overview" aria-labelledby="operations-launch-title">
         <div class="admin-ticket-overview-head">
-          <div><p class="admin-kicker">Operations</p><h2 id="operations-launch-title">Protection & recovery.</h2></div>
+          <div><p class="admin-kicker">Operations & recovery</p><h2 id="operations-launch-title">Packages, communication & resilience.</h2></div>
         </div>
         <div class="admin-ticket-stats">
-          <div class="admin-ticket-stat"><span id="launch-email-domain">—</span><small>Email sending</small><em id="launch-email-domain-detail">Checking Resend sending status…</em></div>
-          <div class="admin-ticket-stat"><span id="launch-reminders">—</span><small>Purchase reminders</small><em>10:00 AM HST daily</em></div>
-          <div class="admin-ticket-stat"><span id="launch-backups">—</span><small>Daily backups</small><em>10:30 AM HST daily</em></div>
-          <div class="admin-ticket-stat"><span id="launch-secrets">—</span><small>Secret separation</small><em>Dedicated admin/ticket keys</em></div>
-          <div class="admin-ticket-stat"><span id="launch-apple-wallet">—</span><small>Apple Wallet</small><em>Pass ID + signing certificates</em></div>
+          <div class="admin-ticket-stat"><span id="launch-email-domain">—</span><small>Email sending</small><em id="launch-email-domain-detail">Checking Resend status…</em></div>
+          <div class="admin-ticket-stat"><span id="launch-drink-package">—</span><small>Six-Drink Package</small><em id="launch-drink-package-detail">Expected $55 · 6 credits · $5 premium upgrade</em></div>
+          <div class="admin-ticket-stat"><span id="launch-water-package">—</span><small>Unlimited Water</small><em id="launch-water-package-detail">Expected $15</em></div>
+          <div class="admin-ticket-stat"><span id="launch-invite-reminders">—</span><small>Invite reminders</small><em>9:00 AM HST daily · unredeemed codes</em></div>
+          <div class="admin-ticket-stat"><span id="launch-reminders">—</span><small>Purchase reminders</small><em>10:00 AM HST daily · redeemed/no ticket</em></div>
+          <div class="admin-ticket-stat"><span id="launch-backups">—</span><small>Daily backups</small><em id="launch-backup-detail">Checking last successful backup…</em></div>
+          <div class="admin-ticket-stat"><span id="launch-apple-wallet">DEFERRED</span><small>Apple Wallet</small><em id="launch-wallet-detail">Optional · not launch-blocking</em></div>
+        </div>
+      </section>
+
+      <section class="admin-ticket-overview" aria-labelledby="rehearsal-launch-title">
+        <div class="admin-ticket-overview-head">
+          <div><p class="admin-kicker">Operational rehearsal</p><h2 id="rehearsal-launch-title">Festival readiness checklist.</h2></div>
+          <a class="admin-outline-button" href="/admin-rehearsal.html">Open Checklist</a>
+        </div>
+        <div class="admin-ticket-stats">
+          <div class="admin-ticket-stat"><span id="launch-rehearsal-percent">—</span><small>Completion</small><em>Same status as dedicated rehearsal page</em></div>
+          <div class="admin-ticket-stat"><span id="launch-rehearsal-passed">—</span><small>Passed</small><em>Automatic + manual checks</em></div>
+          <div class="admin-ticket-stat"><span id="launch-rehearsal-failed">—</span><small>Failures</small><em>Must be resolved before final sign-off</em></div>
+          <div class="admin-ticket-stat"><span id="launch-rehearsal-pending">—</span><small>Pending</small><em>Complete remaining rehearsal items</em></div>
         </div>
       </section>
 
@@ -61,18 +97,14 @@
         <p class="admin-kicker">Pre-launch cleanup</p>
         <h2>Invitation records only.</h2>
         <p class="admin-muted">Deletes invitation-code records and removes invitation lifecycle fields from applications while preserving the applications and tickets themselves.</p>
-        <div class="admin-review-actions">
-          <button id="launch-clear-invites" class="admin-danger-button" type="button">Clear all invitation entries</button>
-        </div>
+        <div class="admin-review-actions"><button id="launch-clear-invites" class="admin-danger-button" type="button">Clear all invitation entries</button></div>
       </section>
 
       <section class="admin-review-panel" style="margin-top:24px;border-color:rgba(180,60,60,.6)">
         <p class="admin-kicker">Final reset</p>
         <h2>All NOCTURNE test data.</h2>
         <p class="admin-muted">Permanently deletes every current NOCTURNE application, review, invitation, ticket/order, comp ticket, refund state, and check-in state stored in Netlify Blobs. This does not remove transactions from your Stripe account.</p>
-        <div class="admin-review-actions">
-          <button id="launch-clear-all-test-data" class="admin-danger-button" type="button">Clear all test data</button>
-        </div>
+        <div class="admin-review-actions"><button id="launch-clear-all-test-data" class="admin-danger-button" type="button">Clear all test data</button></div>
       </section>
 
       <p id="launch-status" class="admin-status" role="status" aria-live="polite"></p>
