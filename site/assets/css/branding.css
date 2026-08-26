@@ -1,5 +1,58 @@
 /* Shared NOCTURNE header/footer lockups. Keep this file focused on branding only. */
 
+/* Public site headers currently contain the legacy favicon + typed wordmark.
+   Replace that presentation with the exact supplied NOCTURNE wordmark asset
+   without changing page navigation or behavior. */
+.site-header .brand {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: clamp(138px, 14vw, 170px);
+  min-height: 50px;
+  margin: 0;
+  line-height: 0;
+  text-decoration: none;
+  background: url('/assets/images/nocturne-logo-wordmark.png') center / contain no-repeat;
+  isolation: auto;
+}
+
+.site-header .brand::before { display: none !important; }
+.site-header .brand > img,
+.site-header .brand > span { display: none !important; }
+
+/* Rich public footers on the homepage and festival page. */
+.footer-brand-lockup {
+  display: block !important;
+  width: min(270px, 72vw);
+  min-height: 98px;
+  margin: 0 0 .8rem !important;
+  line-height: 0;
+  text-decoration: none;
+  background: url('/assets/images/nocturne-logo-wordmark.png') left center / contain no-repeat;
+}
+
+.footer-brand-lockup > * { display: none !important; }
+
+/* Legal pages use a compact footer. Give those footers the same real wordmark
+   without requiring page-specific markup. */
+.footer > .footer-bottom:first-child {
+  position: relative;
+  flex-wrap: wrap;
+  padding-top: 7rem;
+}
+
+.footer > .footer-bottom:first-child::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(250px, 70vw);
+  height: 82px;
+  transform: translateX(-50%);
+  background: url('/assets/images/nocturne-logo-wordmark.png') center / contain no-repeat;
+}
+
+/* Explicit lockup classes remain available for any future page markup. */
 .nocturne-brand-lockup,
 .admin-brand {
   display: inline-flex;
@@ -9,9 +62,7 @@
   text-decoration: none;
 }
 
-.nocturne-brand-lockup {
-  width: clamp(132px, 14vw, 164px);
-}
+.nocturne-brand-lockup { width: clamp(138px, 14vw, 170px); }
 
 .nocturne-brand-lockup .nocturne-header-logo,
 .admin-brand .admin-brand-logo {
@@ -26,9 +77,7 @@
   filter: none !important;
 }
 
-.admin-brand {
-  width: 150px;
-}
+.admin-brand { width: 150px; }
 
 .nocturne-footer-lockup,
 .footer-legal-lockup,
@@ -78,8 +127,10 @@
 }
 
 @media (max-width: 680px) {
-  .nocturne-brand-lockup { width: 126px; }
+  .site-header .brand,
+  .nocturne-brand-lockup { width: 126px; min-height: 44px; }
   .admin-brand { width: 112px; }
+  .footer-brand-lockup { width: min(230px, 72vw); min-height: 84px; }
   .nocturne-footer-lockup,
   .footer-legal-lockup,
   .admin-footer-brand { width: min(230px, 72vw); }
