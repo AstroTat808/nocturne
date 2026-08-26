@@ -37,6 +37,10 @@
     if (el) el.textContent = value;
   }
 
+  function restrictedSendOnlyKey(email = {}) {
+    return /restricted to only send emails/i.test(String(email.error || email.diagnostic || ''));
+  }
+
   async function request(options = {}) {
     const response = await fetch(API, {
       credentials: 'same-origin',
@@ -60,6 +64,8 @@
       const email = data.email || {};
       const operations = data.operations || {};
       const displayedMode = stripe.apiMode || stripe.keyMode || 'unknown';
+      const sendOnlyKey = restrictedSendOnlyKey(email);
+
       text(mode, displayedMode === 'live' ? 'LIVE' : displayedMode === 'test' ? 'TEST' : displayedMode.toUpperCase());
       text(webhook, stripe.webhookEndpointConfigured && stripe.webhookEventsConfigured && stripe.webhookSecretConfigured ? 'Configured' : 'Needs attention');
       text(price, money(stripe.priceCents, stripe.currency));
@@ -79,8 +85,17 @@
         text(readyDetail, 'Stripe live configuration is incomplete.');
       }
 
-      text(emailDomain, email.sendingEnabled ? 'Verified' : email.configured ? (email.domainStatus || 'Needs attention') : 'Not configured');
-      text(emailDetail, email.diagnostic || 'No Resend diagnostic returned.');
+      if (email.sendingEnabled) {
+        text(emailDomain, 'Verified');
+        text(emailDetail, email.diagnostic || 'Resend sending domain is verified.');
+      } else if (sendOnlyKey && email.configured) {
+        text(emailDomain, 'Send-only key');
+        text(emailDetail, `Operational email credentials configured${email.domainName ? ` for ${email.domainName}` : ''}. Domain-management lookup is unavailable because this Resend API key is intentionally restricted to sending only. Resend: ${email.error || 'This API key is restricted to only send emails.'}`);
+      } else {
+        text(emailDomain, email.configured ? (email.domainStatus || 'Needs attention') : 'Not configured');
+        text(emailDetail, email.diagnostic || 'No Resend diagnostic returned.');
+      }
+
       text(reminders, operations.purchaseRemindersEnabled ? 'Enabled' : 'Disabled');
       text(backups, operations.backupsEnabled ? `${operations.backupRetentionDays || 30} days` : 'Disabled');
       text(secrets, operations.dedicatedSecretsReady ? 'Separated' : 'Needs attention');
