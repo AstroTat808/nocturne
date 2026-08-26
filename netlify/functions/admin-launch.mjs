@@ -93,6 +93,44 @@ async function stripeGet(path) {
   return data;
 }
 
+function liveAdmissionSession(session, priceCents) {
+  const purchaseType = String(session?.metadata?.purchaseType || '').trim().toLowerCase();
+  return Boolean(
+    session?.livemode === true
+    && session?.status === 'complete'
+    && session?.payment_status === 'paid'
+    && String(session?.metadata?.event || '').trim().toUpperCase() === 'NOCTURNE'
+    && !['drink-package-addon', 'water-package-addon'].includes(purchaseType)
+    && Number(session?.amount_total || 0) >= Math.max(50, Number(priceCents || 0))
+  );
+}
+
+async function latestLiveAdmissionPayment(priceCents) {
+  const result = { verified: false, payment: null, error: null };
+  try {
+    const sessions = await stripeGet('checkout/sessions?limit=100&status=complete');
+    const matches = Array.isArray(sessions?.data)
+      ? sessions.data.filter((session) => liveAdmissionSession(session, priceCents))
+      : [];
+    matches.sort((a, b) => Number(b?.created || 0) - Number(a?.created || 0));
+    const session = matches[0] || null;
+    if (!session) return result;
+    result.verified = true;
+    result.payment = {
+      stripeCheckoutSessionId: session.id || null,
+      stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null,
+      amountTotal: Number(session.amount_total || 0),
+      currency: String(session.currency || process.env.NOCTURNE_TICKET_CURRENCY || 'usd').toLowerCase(),
+      receivedAt: Number(session.created) > 0 ? new Date(Number(session.created) * 1000).toISOString() : null,
+      drinkPackageIncluded: String(session?.metadata?.drinkPackage || '') === 'six-credit',
+      waterPackageIncluded: String(session?.metadata?.waterPackage || '') === 'unlimited'
+    };
+  } catch (error) {
+    result.error = String(error?.message || error).slice(0, 300);
+  }
+  return result;
+}
+
 async function stripeStatus() {
   const key = process.env.STRIPE_SECRET_KEY || '';
   const keyMode = key.startsWith('sk_live_') || key.startsWith('rk_live_')
@@ -116,6 +154,10 @@ async function stripeStatus() {
     webhookEventsConfigured: false,
     priceCents: Number.isInteger(priceCents) ? priceCents : 0,
     currency,
+    configurationReady: false,
+    livePaymentVerified: false,
+    livePayment: null,
+    livePaymentCheckError: null,
     readyForLive: false,
     error: null
   };
@@ -141,11 +183,20 @@ async function stripeStatus() {
       result.webhookEventsConfigured = events.includes('*') || [...REQUIRED_WEBHOOK_EVENTS].every((event) => events.includes(event));
     }
 
-    result.readyForLive = result.apiMode === 'live'
+    result.configurationReady = result.apiMode === 'live'
       && result.webhookSecretConfigured
       && result.webhookEndpointConfigured
       && result.webhookEventsConfigured
       && result.priceCents >= 50;
+
+    if (result.apiMode === 'live') {
+      const evidence = await latestLiveAdmissionPayment(result.priceCents);
+      result.livePaymentVerified = evidence.verified;
+      result.livePayment = evidence.payment;
+      result.livePaymentCheckError = evidence.error;
+    }
+
+    result.readyForLive = result.configurationReady && result.livePaymentVerified;
   } catch (error) {
     result.error = String(error?.message || error).slice(0, 300);
   }
@@ -155,20 +206,56 @@ async function stripeStatus() {
 
 async function emailStatus() {
   const configured = Boolean(process.env.RESEND_API_KEY && process.env.NOCTURNE_EMAIL_FROM);
-  const from = String(process.env.NOCTURNE_EMAIL_FROM || '');
+  const from = String(process.env.NOCTURNE_EMAIL_FROM || '').trim();
   const domainName = /@([^>\s]+)/.exec(from)?.[1]?.toLowerCase() || '';
-  const result = { configured, domainName, domainFound: false, domainStatus: null, sendingEnabled: false, error: null };
-  if (!configured || !domainName) return result;
+  const result = {
+    configured,
+    fromAddress: from,
+    domainName,
+    domainFound: false,
+    domainStatus: null,
+    sendingCapability: null,
+    receivingCapability: null,
+    region: null,
+    sendingEnabled: false,
+    diagnostic: null,
+    error: null
+  };
+
+  if (!configured) {
+    result.diagnostic = 'RESEND_API_KEY and/or NOCTURNE_EMAIL_FROM is not configured.';
+    return result;
+  }
+  if (!domainName) {
+    result.diagnostic = 'NOCTURNE_EMAIL_FROM does not contain a valid sending domain.';
+    return result;
+  }
+
   try {
     const response = await fetch('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || `Resend returned ${response.status}.`);
     const domain = Array.isArray(data.data) ? data.data.find((item) => String(item?.name || '').toLowerCase() === domainName) : null;
     result.domainFound = Boolean(domain);
+    if (!domain) {
+      result.diagnostic = `Resend API: domain ${domainName} was not found in this account.`;
+      return result;
+    }
+
     result.domainStatus = domain?.status || null;
-    result.sendingEnabled = domain?.capabilities?.sending === 'enabled' || domain?.status === 'verified';
+    result.sendingCapability = domain?.capabilities?.sending || null;
+    result.receivingCapability = domain?.capabilities?.receiving || null;
+    result.region = domain?.region || null;
+    result.sendingEnabled = result.sendingCapability === 'enabled' || result.domainStatus === 'verified';
+    result.diagnostic = [
+      `Domain ${domainName}`,
+      `status: ${result.domainStatus || 'not reported'}`,
+      `sending: ${result.sendingCapability || 'not reported'}`,
+      result.region ? `region: ${result.region}` : null
+    ].filter(Boolean).join(' · ');
   } catch (error) {
     result.error = String(error?.message || error).slice(0, 300);
+    result.diagnostic = `Resend API error: ${result.error}`;
   }
   return result;
 }
