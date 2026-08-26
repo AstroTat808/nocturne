@@ -8,9 +8,9 @@
   <title>Event Check-In | NOCTURNE</title>
   <link rel="icon" href="/assets/images/favicon.png">
   <link rel="stylesheet" href="/assets/css/styles.css">
-  <link rel="stylesheet" href="/assets/css/check-in.css">
+  <link rel="stylesheet" href="/assets/css/check-in.css?v=20260826b">
   <script src="/assets/vendor/html5-qrcode.min.js" defer></script>
-  <script src="/assets/js/check-in.js?v=20260826a" defer></script>
+  <script src="/assets/js/check-in.js?v=20260826b" defer></script>
 </head>
 <body class="checkin-body">
   <main class="checkin-shell">
@@ -18,10 +18,10 @@
       <img class="checkin-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768">
       <p class="section-kicker">Private Operations</p>
       <h1>Event<br>check-in.</h1>
-      <p>Authorized Wild Ones staff only.</p>
+      <p>Authorized Wild Ones staff only. Sign in once; the live ticket scanner will use the iPhone rear camera directly inside this console.</p>
       <form id="checkin-login-form" class="checkin-form">
         <input name="password" type="password" autocomplete="current-password" placeholder="Check-in password" required>
-        <button class="btn" type="submit">Open Scanner →</button>
+        <button class="btn" type="submit">Open Live Scanner →</button>
       </form>
       <p id="checkin-login-status" class="checkin-status" role="status"></p>
       <a class="checkin-back-link" href="/admin">← Admin dashboard</a>
@@ -35,28 +35,34 @@
 
       <div id="scanner-frame" class="scanner-frame" data-mode="idle">
         <video id="checkin-video" playsinline muted></video>
-        <div id="checkin-reader" class="checkin-reader" aria-label="QR camera scanner"></div>
+        <div id="checkin-reader" class="checkin-reader" aria-label="Live QR camera scanner"></div>
         <div class="scanner-target" aria-hidden="true"></div>
       </div>
 
-      <div class="checkin-actions">
-        <button id="start-scanner" class="btn" type="button">Start Camera Scanner</button>
+      <div class="checkin-actions checkin-live-actions">
+        <button id="start-scanner" class="btn" type="button">Start Live Ticket Scanner</button>
         <button id="stop-scanner" class="btn secondary" type="button" hidden>Stop Camera</button>
-        <button id="scan-image" class="btn secondary" type="button">Scan QR From Photo</button>
-        <input id="qr-image-input" type="file" accept="image/*" hidden>
       </div>
 
-      <p id="scanner-help" class="checkin-help">Tap Start Camera Scanner and allow camera access when prompted. The scanner supports current iPhone/iPad Safari and modern Android browsers. You can also scan a saved QR image or paste a ticket link below.</p>
+      <p id="scanner-help" class="checkin-help"><strong>Stay on this screen.</strong> The live scanner uses the iPhone rear camera inside Safari. Staff do not need to open the iPhone Camera app.</p>
 
-      <form id="manual-checkin-form" class="checkin-form manual-checkin-form">
-        <label for="ticket-input">Ticket URL or token</label>
-        <input id="ticket-input" name="ticket" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste scanned ticket URL">
-        <button class="btn secondary" type="submit">Validate Ticket</button>
-      </form>
+      <details class="checkin-backup">
+        <summary>Backup options</summary>
+        <p>Use these only if the live scanner cannot read a damaged, dim, or saved ticket QR.</p>
+        <div class="checkin-actions">
+          <button id="scan-image" class="btn secondary" type="button">Scan QR From Photo</button>
+          <input id="qr-image-input" type="file" accept="image/*" hidden>
+        </div>
+        <form id="manual-checkin-form" class="checkin-form manual-checkin-form">
+          <label for="ticket-input">Ticket URL or token</label>
+          <input id="ticket-input" name="ticket" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste ticket URL or token">
+          <button class="btn secondary" type="submit">Validate Ticket</button>
+        </form>
+      </details>
 
       <section id="checkin-result" class="checkin-result" data-state="idle" aria-live="assertive">
         <strong>READY</strong>
-        <span>Waiting for a ticket.</span>
+        <span>Live scanner starting…</span>
       </section>
     </section>
   </main>
