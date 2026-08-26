@@ -138,8 +138,8 @@ export default async (req) => {
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': currency,
     'line_items[0][price_data][unit_amount]': String(config.priceCents),
-    'line_items[0][price_data][product_data][name]': 'NOCTURNE Six-Drink Package',
-    'line_items[0][price_data][product_data][description]': 'Six prepaid bar credits. Beer or well cocktail per credit; premium cocktails require a $5 upgrade at the bar. 21+ ID required.'
+    'line_items[0][price_data][product_data][name]': 'NOCTURNE Six-Drink Package — NON-REFUNDABLE',
+    'line_items[0][price_data][product_data][description]': 'FINAL SALE / NON-REFUNDABLE. Six prepaid bar credits. Beer or well cocktail per credit; premium cocktails require a $5 upgrade at the bar. 21+ ID required. Unused credits are not refundable, exchangeable, transferable, or redeemable for cash.'
   };
   if (!params.customer_email) delete params.customer_email;
 
