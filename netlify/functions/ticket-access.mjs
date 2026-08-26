@@ -48,7 +48,7 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
   } else if (configured) {
     lead = 'Your invitation has been successfully redeemed. Your private ticket checkout is now available.';
     status = `<div class="private-access-status"><strong>${ticketName}</strong><br>${formattedPrice()} · One ticket per approved invitation</div>`;
-    const packageOption = drinkPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="drink_package" value="yes"><span><strong>I am 21+ — Add the Six-Drink Package · ${formattedPackagePrice()}</strong><small>Six credits for beer or well cocktails. Premium cocktails use one credit plus a $5 upgrade paid at the bar. Valid photo ID and event wristband required. Non-transferable; unused credits expire when event bar service ends. Service may be refused.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>NON-REFUNDABLE:</strong> All drink-package sales are final. The Six-Drink Package cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</small></span></label>` : '';
+    const packageOption = drinkPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="drink_package" value="yes"><span><strong>I am 21+ — Add the Six-Drink Package · ${formattedPackagePrice()}</strong><small>Six credits for beer or well cocktails. Premium cocktails use one credit plus a $5 upgrade paid at the bar. Valid photo ID and event wristband required. Non-transferable; unused credits expire when event bar service ends. Service may be refused.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> The Six-Drink Package cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</small></span></label><label class="drink-package-option"><input type="checkbox" name="drink_package_policy" value="yes" disabled><span><strong>I understand this drink package is non-refundable.</strong><small>This acknowledgment is required before checkout when the Six-Drink Package is selected.</small></span></label>` : '';
     actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-checkout">${packageOption}<div class="private-access-actions"><button class="btn" type="submit">Continue to Stripe →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></div></form>`;
   } else {
     lead = 'Your invitation was successfully redeemed. The private ticket checkout is not live yet, so there is nothing else you need to do right now.';
@@ -69,6 +69,7 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
   <link rel="icon" href="/assets/images/favicon.png">
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/private-access.css">
+  <script src="/assets/js/ticket-package-policy.js" defer></script>
 </head>
 <body class="private-access-page">
   <main class="private-access-shell">
