@@ -1,6 +1,8 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { appleWalletStatus } from './_apple-wallet.mjs';
+import { drinkPackageConfig } from './_drink-package.mjs';
+import { waterPackageConfig } from './_water-package.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -9,6 +11,7 @@ const ORDER_STORE = 'nocturne-ticket-orders';
 const STRIPE_EVENT_STORE = 'nocturne-stripe-events';
 const EMAIL_EVENT_STORE = 'nocturne-email-events';
 const DRINK_REDEMPTION_STORE = 'nocturne-drink-redemptions';
+const BACKUP_STORE = 'nocturne-backups';
 const SESSION_COOKIE = 'nocturne_admin';
 const REQUIRED_WEBHOOK_EVENTS = new Set([
   'checkout.session.completed',
@@ -117,6 +120,7 @@ async function latestLiveAdmissionPayment(priceCents) {
     if (!session) return result;
     result.verified = true;
     result.payment = {
+      submissionId: String(session?.metadata?.submissionId || session?.client_reference_id || '').trim() || null,
       stripeCheckoutSessionId: session.id || null,
       stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id || null,
       amountTotal: Number(session.amount_total || 0),
@@ -125,6 +129,34 @@ async function latestLiveAdmissionPayment(priceCents) {
       drinkPackageIncluded: String(session?.metadata?.drinkPackage || '') === 'six-credit',
       waterPackageIncluded: String(session?.metadata?.waterPackage || '') === 'unlimited'
     };
+  } catch (error) {
+    result.error = String(error?.message || error).slice(0, 300);
+  }
+  return result;
+}
+
+async function fulfillmentStatus(payment) {
+  const result = { verified: false, ticketId: null, paidAt: null, currentStatus: null, error: null };
+  if (!payment?.submissionId || !payment?.stripeCheckoutSessionId) {
+    result.error = 'Live payment did not include a NOCTURNE submission identity.';
+    return result;
+  }
+  try {
+    const store = getStore({ name: ORDER_STORE, consistency: 'strong' });
+    const summary = await store.get(`submission-${payment.submissionId}`, { type: 'json', consistency: 'strong' });
+    if (!summary) {
+      result.error = 'No NOCTURNE ticket summary exists for the successful live Stripe checkout.';
+      return result;
+    }
+    result.ticketId = summary.ticketId || null;
+    result.paidAt = summary.paidAt || null;
+    result.currentStatus = summary.status || null;
+    const checkoutMatches = String(summary.stripeCheckoutSessionId || '') === String(payment.stripeCheckoutSessionId);
+    const paymentIntentMatches = !payment.stripePaymentIntentId
+      || !summary.stripePaymentIntentId
+      || String(summary.stripePaymentIntentId) === String(payment.stripePaymentIntentId);
+    result.verified = Boolean(checkoutMatches && paymentIntentMatches && summary.ticketId && summary.paidAt);
+    if (!result.verified) result.error = 'Stripe payment exists, but the matching NOCTURNE ticket fulfillment record is incomplete or mismatched.';
   } catch (error) {
     result.error = String(error?.message || error).slice(0, 300);
   }
@@ -158,6 +190,8 @@ async function stripeStatus() {
     livePaymentVerified: false,
     livePayment: null,
     livePaymentCheckError: null,
+    fulfillmentVerified: false,
+    fulfillment: null,
     readyForLive: false,
     error: null
   };
@@ -194,9 +228,13 @@ async function stripeStatus() {
       result.livePaymentVerified = evidence.verified;
       result.livePayment = evidence.payment;
       result.livePaymentCheckError = evidence.error;
+      if (evidence.verified) {
+        result.fulfillment = await fulfillmentStatus(evidence.payment);
+        result.fulfillmentVerified = Boolean(result.fulfillment?.verified);
+      }
     }
 
-    result.readyForLive = result.configurationReady && result.livePaymentVerified;
+    result.readyForLive = result.configurationReady && result.livePaymentVerified && result.fulfillmentVerified;
   } catch (error) {
     result.error = String(error?.message || error).slice(0, 300);
   }
@@ -210,6 +248,8 @@ async function emailStatus() {
   const domainName = /@([^>\s]+)/.exec(from)?.[1]?.toLowerCase() || '';
   const result = {
     configured,
+    operational: false,
+    restrictedSendOnlyKey: false,
     fromAddress: from,
     domainName,
     domainFound: false,
@@ -247,6 +287,7 @@ async function emailStatus() {
     result.receivingCapability = domain?.capabilities?.receiving || null;
     result.region = domain?.region || null;
     result.sendingEnabled = result.sendingCapability === 'enabled' || result.domainStatus === 'verified';
+    result.operational = result.sendingEnabled;
     result.diagnostic = [
       `Domain ${domainName}`,
       `status: ${result.domainStatus || 'not reported'}`,
@@ -255,12 +296,24 @@ async function emailStatus() {
     ].filter(Boolean).join(' · ');
   } catch (error) {
     result.error = String(error?.message || error).slice(0, 300);
-    result.diagnostic = `Resend API error: ${result.error}`;
+    result.restrictedSendOnlyKey = /restricted to only send emails/i.test(result.error);
+    result.operational = configured && result.restrictedSendOnlyKey;
+    result.diagnostic = result.restrictedSendOnlyKey
+      ? `Send-only Resend API key accepted for ${domainName}; domain-management lookup is intentionally unavailable.`
+      : `Resend API error: ${result.error}`;
   }
   return result;
 }
 
+function inviteRemindersEnabled() {
+  const enabled = process.env.NOCTURNE_INVITE_REMINDERS_ENABLED ?? process.env.NOCTURNE_PURCHASE_REMINDERS_ENABLED ?? '';
+  const mode = process.env.NOCTURNE_INVITE_REMINDERS_MODE ?? process.env.NOCTURNE_PURCHASE_REMINDERS_MODE ?? 'test';
+  return String(enabled).toLowerCase() === 'true' && String(mode).toLowerCase() === 'live';
+}
+
 function operationsStatus() {
+  const drink = drinkPackageConfig();
+  const water = waterPackageConfig();
   const dedicatedSecrets = {
     adminSession: Boolean(process.env.NOCTURNE_ADMIN_SESSION_SECRET),
     checkinKey: Boolean(process.env.NOCTURNE_CHECKIN_KEY),
@@ -270,18 +323,113 @@ function operationsStatus() {
     ticketQr: Boolean(process.env.NOCTURNE_TICKET_QR_SECRET),
     ticketAccess: Boolean(process.env.NOCTURNE_TICKET_ACCESS_SECRET)
   };
+  const turnstile = {
+    siteKeyConfigured: Boolean(process.env.NOCTURNE_TURNSTILE_SITE_KEY),
+    secretKeyConfigured: Boolean(process.env.NOCTURNE_TURNSTILE_SECRET_KEY)
+  };
+  turnstile.ready = turnstile.siteKeyConfigured && turnstile.secretKeyConfigured;
+  const venue = {
+    nameConfigured: Boolean(process.env.NOCTURNE_VENUE_NAME),
+    addressConfigured: Boolean(process.env.NOCTURNE_VENUE_ADDRESS)
+  };
+  venue.ready = venue.nameConfigured && venue.addressConfigured;
+  const ticketing = {
+    signingReady: dedicatedSecrets.ticketQr && dedicatedSecrets.ticketAccess,
+    gateReady: dedicatedSecrets.checkinKey && dedicatedSecrets.checkinSession,
+    barReady: dedicatedSecrets.barKey && dedicatedSecrets.barSession,
+    adminSessionReady: dedicatedSecrets.adminSession
+  };
+  const packages = {
+    drink: {
+      enabled: drink.enabled,
+      priceCents: drink.priceCents,
+      credits: drink.credits,
+      premiumUpgradeCents: drink.premiumUpgradeCents,
+      expected: drink.enabled && drink.priceCents === 5500 && drink.credits === 6 && drink.premiumUpgradeCents === 500
+    },
+    water: {
+      enabled: water.enabled,
+      priceCents: water.priceCents,
+      expected: water.enabled && water.priceCents === 1500
+    }
+  };
+  packages.ready = packages.drink.expected && packages.water.expected;
   return {
+    turnstile,
+    venue,
+    ticketing,
+    packages,
+    inviteRemindersEnabled: inviteRemindersEnabled(),
+    inviteReminderSchedule: '9:00 AM HST daily',
     purchaseRemindersEnabled: String(process.env.NOCTURNE_PURCHASE_REMINDERS_ENABLED || '').toLowerCase() === 'true'
       && String(process.env.NOCTURNE_PURCHASE_REMINDERS_MODE || 'test').toLowerCase() === 'live',
     purchaseReminderSchedule: '10:00 AM HST daily',
-    backupsEnabled: true,
     backupSchedule: '10:30 AM HST daily',
     backupRetentionDays: Math.max(7, Math.min(Number(process.env.NOCTURNE_BACKUP_RETENTION_DAYS || 30), 365)),
     opsAlertsConfigured: Boolean((process.env.NOCTURNE_OPS_ALERT_TO || process.env.NOCTURNE_APPLICATION_NOTIFY_TO) && process.env.RESEND_API_KEY && process.env.NOCTURNE_EMAIL_FROM),
     appleWallet: appleWalletStatus(),
+    appleWalletLaunchBlocking: false,
     dedicatedSecrets,
     dedicatedSecretsReady: Object.values(dedicatedSecrets).every(Boolean)
   };
+}
+
+async function backupStatus(retentionDays) {
+  const result = {
+    healthy: false,
+    latestKey: null,
+    lastSuccessfulAt: null,
+    ageHours: null,
+    recordCount: null,
+    retentionDays,
+    error: null
+  };
+  try {
+    const store = getStore({ name: BACKUP_STORE, consistency: 'strong' });
+    const { blobs } = await store.list();
+    const latest = blobs
+      .filter(({ key }) => /^daily-\d{4}-\d{2}-\d{2}$/.test(String(key)))
+      .sort((a, b) => String(b.key).localeCompare(String(a.key)))[0];
+    if (!latest) {
+      result.error = 'No completed daily backup exists yet.';
+      return result;
+    }
+    const record = await store.get(latest.key, { type: 'json', consistency: 'strong' });
+    result.latestKey = latest.key;
+    result.lastSuccessfulAt = record?.createdAt || null;
+    result.recordCount = record?.counts
+      ? Object.values(record.counts).reduce((sum, count) => sum + Number(count || 0), 0)
+      : null;
+    const created = new Date(result.lastSuccessfulAt || 0).getTime();
+    if (Number.isFinite(created) && created > 0) {
+      result.ageHours = Math.round(((Date.now() - created) / 3600000) * 10) / 10;
+      result.healthy = result.ageHours <= 36;
+    }
+    if (!result.healthy && !result.error) result.error = 'The most recent successful backup is older than 36 hours.';
+  } catch (error) {
+    result.error = String(error?.message || error).slice(0, 300);
+  }
+  return result;
+}
+
+function coreReadiness(stripe, email, operations, backup) {
+  const blockers = [];
+  if (!stripe.configurationReady) blockers.push('Stripe live configuration');
+  if (!stripe.livePaymentVerified) blockers.push('successful live admission payment');
+  if (!stripe.fulfillmentVerified) blockers.push('webhook ticket fulfillment evidence');
+  if (!email.operational) blockers.push('email sending');
+  if (!operations.turnstile.ready) blockers.push('application Turnstile protection');
+  if (!operations.venue.ready) blockers.push('private venue runtime');
+  if (!operations.ticketing.signingReady) blockers.push('digital ticket signing');
+  if (!operations.ticketing.gateReady) blockers.push('gate scanner credentials');
+  if (!operations.ticketing.barReady) blockers.push('bar console credentials');
+  if (!operations.ticketing.adminSessionReady) blockers.push('admin session signing');
+  if (!operations.packages.ready) blockers.push('drink/water package configuration');
+  if (!operations.inviteRemindersEnabled) blockers.push('unredeemed invitation reminders');
+  if (!operations.purchaseRemindersEnabled) blockers.push('ticket purchase reminders');
+  if (!operations.dedicatedSecretsReady) blockers.push('dedicated secret separation');
+  if (!backup.healthy) blockers.push('recent successful data backup');
+  return { coreReady: blockers.length === 0, blockers };
 }
 
 function withoutInviteFields(review = {}) {
@@ -352,9 +500,6 @@ async function clearInvitations() {
 }
 
 async function clearAllTestData() {
-  // Delete dependent records first, then applications last. We intentionally use
-  // individual delete() operations because the site's runtime previously rejected
-  // deleteAll() for these site-wide stores with a 403.
   const deletedInvites = await deleteStoreEntries(INVITE_STORE);
   const deletedOrders = await deleteStoreEntries(ORDER_STORE);
   const deletedStripeEvents = await deleteStoreEntries(STRIPE_EVENT_STORE);
@@ -380,7 +525,9 @@ export default async (req) => {
 
   if (req.method === 'GET') {
     const [stripe, email] = await Promise.all([stripeStatus(), emailStatus()]);
-    return json({ stripe, email, operations: operationsStatus() });
+    const operations = operationsStatus();
+    const backup = await backupStatus(operations.backupRetentionDays);
+    return json({ stripe, email, operations, backup, overall: coreReadiness(stripe, email, operations, backup) });
   }
 
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
