@@ -7,6 +7,9 @@
     ['na', 'N/A']
   ];
 
+  const shell = document.querySelector('#admin-rehearsal');
+  if (!shell) return;
+
   const esc = (value = '') => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
   const dateTime = (value) => {
     if (!value) return '—';
@@ -16,7 +19,6 @@
 
   let latest = null;
   let saving = false;
-  let loadedForSession = false;
 
   async function request(options = {}) {
     const response = await fetch(API, {
@@ -28,45 +30,12 @@
       ...options
     });
     const data = await response.json().catch(() => ({}));
-    if (response.status === 401) throw new Error('Admin session expired. Sign in again.');
+    if (response.status === 401) {
+      window.location.href = '/admin';
+      throw new Error('Admin session expired. Returning to sign in…');
+    }
     if (!response.ok) throw new Error(data.error || `Request failed (${response.status}).`);
     return data;
-  }
-
-  function ensureShell() {
-    if (document.querySelector('#admin-rehearsal')) return document.querySelector('#admin-rehearsal');
-    const nav = document.querySelector('.admin-operations-nav');
-    if (!nav) return null;
-
-    const section = document.createElement('section');
-    section.id = 'admin-rehearsal';
-    section.className = 'admin-rehearsal';
-    section.innerHTML = `
-      <div class="admin-rehearsal-head">
-        <div>
-          <p class="admin-kicker">Phase 12 · Test mode</p>
-          <h2>Rehearsal checklist.</h2>
-          <p>Use one shared checklist to certify payments, tickets, Wallet, gate, bar, refunds, reporting, and failure drills before launch.</p>
-        </div>
-        <div class="admin-rehearsal-score">
-          <strong id="rehearsal-percent">0%</strong>
-          <span id="rehearsal-summary">0 of 0 passed</span>
-        </div>
-      </div>
-      <div class="admin-rehearsal-progress" aria-label="Rehearsal completion"><span id="rehearsal-progress-bar"></span></div>
-      <div class="admin-rehearsal-toolbar">
-        <label><span>Lead tester / supervisor</span><input id="rehearsal-tester" type="text" maxlength="80" placeholder="Name or initials"></label>
-        <div class="admin-rehearsal-actions">
-          <button id="rehearsal-save-tester" class="admin-outline-button" type="button">Save tester</button>
-          <button id="rehearsal-refresh" class="admin-outline-button" type="button">Refresh checks</button>
-          <button id="rehearsal-reset" class="admin-outline-button danger" type="button">Reset rehearsal</button>
-        </div>
-      </div>
-      <p id="rehearsal-meta" class="admin-muted"></p>
-      <p id="rehearsal-status" class="admin-status" role="status" aria-live="polite"></p>
-      <div id="rehearsal-groups" class="admin-rehearsal-groups"></div>`;
-    nav.after(section);
-    return section;
   }
 
   function stateLabel(state) {
@@ -75,8 +44,6 @@
 
   function render(data) {
     latest = data;
-    const shell = ensureShell();
-    if (!shell) return;
     const tester = shell.querySelector('#rehearsal-tester');
     if (tester && document.activeElement !== tester) tester.value = data.tester || '';
 
@@ -117,7 +84,7 @@
   }
 
   function setStatus(message, error = false) {
-    const node = document.querySelector('#rehearsal-status');
+    const node = shell.querySelector('#rehearsal-status');
     if (!node) return;
     node.textContent = message || '';
     node.classList.toggle('error', Boolean(error));
@@ -129,7 +96,6 @@
       render(await request());
       setStatus('');
     } catch (error) {
-      if (/session expired/i.test(error.message || '')) loadedForSession = false;
       setStatus(error.message || 'Could not load rehearsal checklist.', true);
     }
   }
@@ -138,7 +104,7 @@
     if (saving) return;
     const id = row.dataset.rehearsalId;
     const notes = row.querySelector('[data-rehearsal-notes]')?.value?.trim() || '';
-    const tester = document.querySelector('#rehearsal-tester')?.value?.trim() || latest?.tester || '';
+    const tester = shell.querySelector('#rehearsal-tester')?.value?.trim() || latest?.tester || '';
     saving = true;
     row.classList.add('saving');
     setStatus(`Saving ${stateLabel(state).toLowerCase()} status…`);
@@ -154,7 +120,7 @@
     }
   }
 
-  document.addEventListener('click', async (event) => {
+  shell.addEventListener('click', async (event) => {
     const stateButton = event.target.closest('[data-rehearsal-state]');
     if (stateButton) {
       const row = stateButton.closest('.admin-rehearsal-item');
@@ -165,10 +131,14 @@
     if (event.target.closest('#rehearsal-refresh')) return load();
 
     if (event.target.closest('#rehearsal-save-tester')) {
-      const tester = document.querySelector('#rehearsal-tester')?.value?.trim() || '';
+      const tester = shell.querySelector('#rehearsal-tester')?.value?.trim() || '';
       setStatus('Saving rehearsal lead…');
-      try { render(await request({ method: 'POST', body: JSON.stringify({ action: 'set-tester', tester }) })); setStatus('Rehearsal lead saved.'); }
-      catch (error) { setStatus(error.message || 'Could not save rehearsal lead.', true); }
+      try {
+        render(await request({ method: 'POST', body: JSON.stringify({ action: 'set-tester', tester }) }));
+        setStatus('Rehearsal lead saved.');
+      } catch (error) {
+        setStatus(error.message || 'Could not save rehearsal lead.', true);
+      }
       return;
     }
 
@@ -176,31 +146,16 @@
       if (!window.confirm('Reset every manual rehearsal item to Pending? This does not delete ticket, payment, or audit data.')) return;
       const typed = window.prompt('Type RESET REHEARSAL to confirm:');
       if (typed !== 'RESET REHEARSAL') return setStatus('Reset canceled. Confirmation phrase did not match.', true);
-      const tester = document.querySelector('#rehearsal-tester')?.value?.trim() || '';
+      const tester = shell.querySelector('#rehearsal-tester')?.value?.trim() || '';
       setStatus('Resetting rehearsal checklist…');
-      try { render(await request({ method: 'POST', body: JSON.stringify({ action: 'reset', confirm: typed, tester }) })); setStatus('Rehearsal checklist reset.'); }
-      catch (error) { setStatus(error.message || 'Could not reset rehearsal checklist.', true); }
+      try {
+        render(await request({ method: 'POST', body: JSON.stringify({ action: 'reset', confirm: typed, tester }) }));
+        setStatus('Rehearsal checklist reset.');
+      } catch (error) {
+        setStatus(error.message || 'Could not reset rehearsal checklist.', true);
+      }
     }
   });
 
-  function boot() {
-    const shell = ensureShell();
-    const dashboard = document.querySelector('#admin-dashboard');
-    if (!shell || !dashboard) return setTimeout(boot, 100);
-
-    const maybeLoad = () => {
-      if (dashboard.hidden) {
-        loadedForSession = false;
-        return;
-      }
-      if (!loadedForSession) {
-        loadedForSession = true;
-        load();
-      }
-    };
-
-    new MutationObserver(maybeLoad).observe(dashboard, { attributes: true, attributeFilter: ['hidden'] });
-    maybeLoad();
-  }
-  boot();
+  load();
 })();
