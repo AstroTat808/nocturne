@@ -1,0 +1,86 @@
+/* Shared NOCTURNE header/footer lockups. Keep this file focused on branding only. */
+
+.nocturne-brand-lockup,
+.admin-brand {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  line-height: 0;
+  text-decoration: none;
+}
+
+.nocturne-brand-lockup {
+  width: clamp(132px, 14vw, 164px);
+}
+
+.nocturne-brand-lockup .nocturne-header-logo,
+.admin-brand .admin-brand-logo {
+  display: block;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  aspect-ratio: auto !important;
+  object-fit: contain !important;
+  border-radius: 0 !important;
+  mix-blend-mode: normal !important;
+  filter: none !important;
+}
+
+.admin-brand {
+  width: 150px;
+}
+
+.nocturne-footer-lockup,
+.footer-legal-lockup,
+.admin-footer-brand {
+  display: block;
+  width: min(270px, 70vw);
+  line-height: 0;
+  text-decoration: none;
+}
+
+.nocturne-footer-lockup .nocturne-footer-logo,
+.footer-legal-lockup .nocturne-footer-logo,
+.admin-footer-brand img {
+  display: block;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  aspect-ratio: auto !important;
+  object-fit: contain !important;
+  border-radius: 0 !important;
+  mix-blend-mode: normal !important;
+  filter: none !important;
+}
+
+.footer-legal-brand {
+  display: flex;
+  justify-content: center;
+  padding: 1.7rem 1rem .35rem;
+}
+
+.admin-footer {
+  display: grid;
+  justify-items: center;
+  gap: .65rem;
+  padding: 2rem 1rem 2.4rem;
+  border-top: 1px solid rgba(216, 154, 43, .18);
+  background: rgba(3, 3, 3, .9);
+  text-align: center;
+}
+
+.admin-footer p {
+  margin: 0;
+  color: #786e61;
+  font-size: .58rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 680px) {
+  .nocturne-brand-lockup { width: 126px; }
+  .admin-brand { width: 112px; }
+  .nocturne-footer-lockup,
+  .footer-legal-lockup,
+  .admin-footer-brand { width: min(230px, 72vw); }
+}
