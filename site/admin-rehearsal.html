@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#030303">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Rehearsal Checklist | NOCTURNE</title>
+  <link rel="icon" href="/assets/images/favicon.png">
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+  <link rel="stylesheet" href="/assets/css/admin-rehearsal.css?v=20260826b">
+  <script src="/assets/js/admin-rehearsal.js?v=20260826b" defer></script>
+</head>
+<body class="admin-body rehearsal-body">
+  <header class="admin-topbar">
+    <a class="admin-brand" href="/admin" aria-label="NOCTURNE admin dashboard">
+      <img class="admin-brand-logo" src="/assets/images/nocturne-logo-wordmark.png" alt="NOCTURNE Festival" width="2048" height="745">
+    </a>
+    <div class="admin-top-actions">
+      <a href="/admin">Guest operations</a>
+      <a href="/admin-operations.html">Live dashboard</a>
+      <a href="/check-in">Check-In ↗</a>
+      <a href="/bar">Bar Console ↗</a>
+    </div>
+  </header>
+
+  <main class="rehearsal-shell">
+    <section class="rehearsal-hero">
+      <div>
+        <p class="admin-kicker">Phase 12 · Test mode</p>
+        <h1>Rehearsal checklist.</h1>
+        <p>Certify payments, tickets, gate operations, bar workflows, refunds, reporting, and failure drills before launch. This checklist is shared across authorized NOCTURNE administrators.</p>
+      </div>
+      <div class="rehearsal-hero-actions">
+        <a class="admin-outline-button" href="/admin">← Back to Admin</a>
+        <a class="admin-outline-button" href="/admin-operations.html">Live Festival Dashboard</a>
+      </div>
+    </section>
+
+    <section id="admin-rehearsal" class="admin-rehearsal" aria-labelledby="rehearsal-title">
+      <div class="admin-rehearsal-head">
+        <div>
+          <p class="admin-kicker">Launch certification</p>
+          <h2 id="rehearsal-title">Production rehearsal.</h2>
+          <p>Automatic checks read current configuration and test evidence. Manual checks remain under staff control so real-device and real-world behavior can be certified deliberately.</p>
+        </div>
+        <div class="admin-rehearsal-score">
+          <strong id="rehearsal-percent">0%</strong>
+          <span id="rehearsal-summary">0 of 0 passed</span>
+        </div>
+      </div>
+
+      <div class="admin-rehearsal-progress" aria-label="Rehearsal completion">
+        <span id="rehearsal-progress-bar"></span>
+      </div>
+
+      <div class="admin-rehearsal-toolbar">
+        <label>
+          <span>Lead tester / supervisor</span>
+          <input id="rehearsal-tester" type="text" maxlength="80" placeholder="Name or initials">
+        </label>
+        <div class="admin-rehearsal-actions">
+          <button id="rehearsal-save-tester" class="admin-outline-button" type="button">Save tester</button>
+          <button id="rehearsal-refresh" class="admin-outline-button" type="button">Refresh checks</button>
+          <button id="rehearsal-reset" class="admin-outline-button danger" type="button">Reset rehearsal</button>
+        </div>
+      </div>
+
+      <p id="rehearsal-meta" class="admin-muted"></p>
+      <p id="rehearsal-status" class="admin-status" role="status" aria-live="polite">Loading rehearsal checklist…</p>
+      <div id="rehearsal-groups" class="admin-rehearsal-groups"></div>
+    </section>
+  </main>
+
+  <footer class="admin-footer">
+    <a class="admin-footer-brand" href="/" aria-label="NOCTURNE Festival home">
+      <img src="/assets/images/nocturne-logo-wordmark.png" alt="NOCTURNE Festival" width="2048" height="745" loading="lazy">
+    </a>
+    <p>Wild Ones &amp; Bass Babes Present · Rehearsal Operations</p>
+  </footer>
+</body>
+</html>
