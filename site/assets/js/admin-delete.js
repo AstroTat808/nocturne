@@ -12,6 +12,21 @@
     return stats;
   }
 
+  async function removeFromUi(application, response) {
+    state.applications = state.applications.filter((item) => item.id !== application.id);
+    state.selectedId = null;
+    renderStats(applicationStats());
+    renderInviteStats();
+    recomputeTicketStats();
+    renderDetail();
+    setStatus(
+      els.loadStatus,
+      response.forced
+        ? `Revoked ticket access and deleted ${application.fullName || response.deletedEmail || 'applicant'}${response.financialRecordRetained ? '; minimal accounting/audit records were retained' : ''}.`
+        : `${response.compTicketRevoked ? 'Revoked the complimentary ticket and deleted' : 'Deleted'} ${application.fullName || response.deletedEmail || 'applicant'}${response.inviteRevoked ? ' and revoked their invitation' : ''}.`
+    );
+  }
+
   function enhanceDeleteControl() {
     if (!els.detail || !state.selectedId) return;
     if (els.detail.querySelector('[data-admin-delete-panel]')) return;
@@ -45,19 +60,61 @@
       || ticket.drinkPackageCheckoutSessionId
       || ticket.drinkPackagePaymentIntentId
       || ticket.drinkPackageRefundId
+      || ticket.waterPackageCheckoutSessionId
+      || ticket.waterPackagePaymentIntentId
     );
     const canDeleteComp = isComp
       && ticketState(application) === 'paid'
       && !isCheckedIn
       && !hasStripeActivity;
     const hasTicketActivity = ticketState(application) !== 'none' && !canDeleteComp;
+
     if (hasTicketActivity) {
-      note.textContent = isComp && isCheckedIn
-        ? 'This complimentary ticket has already been checked in. Deletion is locked to preserve the admission record.'
-        : 'This applicant has ticket or payment activity. Deletion is locked so financial and admission records are not accidentally destroyed.';
-      const locked = actionButton('Delete unavailable', () => {}, { danger: true });
-      locked.disabled = true;
-      actions.append(locked, result);
+      note.textContent = 'This applicant has ticket, payment, or admission activity. You may force-revoke the ticket and delete the applicant record. Any drink/water entitlement is invalidated immediately. Minimal financial/admission identifiers are retained for accounting and audit. No refund is issued by this action.';
+      const button = actionButton('Force Revoke & Delete', async () => {
+        const expected = String(application.email || '').trim();
+        if (!expected) {
+          setStatus(result, 'This applicant has no email address to use for deletion confirmation.', true);
+          return;
+        }
+
+        const typedEmail = window.prompt(
+          `FORCE REVOKE AND DELETE ${application.fullName || 'this applicant'}?\n\n` +
+          'This immediately invalidates admission and package access, even if the ticket was already checked in. It does NOT issue a refund. Minimal accounting/audit data will remain.\n\n' +
+          `Type the applicant email exactly to continue:\n${expected}`
+        );
+        if (typedEmail === null) return;
+        if (typedEmail.trim().toLowerCase() !== expected.toLowerCase()) {
+          setStatus(result, 'Email did not match. Nothing was changed.', true);
+          return;
+        }
+
+        const phrase = window.prompt('Type REVOKE AND DELETE to confirm this irreversible action:');
+        if (phrase === null) return;
+        if (phrase.trim().toUpperCase() !== 'REVOKE AND DELETE') {
+          setStatus(result, 'Confirmation phrase did not match. Nothing was changed.', true);
+          return;
+        }
+
+        button.disabled = true;
+        setStatus(result, 'Revoking ticket access and deleting applicant…');
+        try {
+          const response = await api(DELETE_API, {
+            method: 'POST',
+            body: JSON.stringify({
+              submissionId: application.id,
+              confirmEmail: typedEmail.trim(),
+              force: true,
+              confirmAction: phrase.trim()
+            })
+          });
+          await removeFromUi(application, response);
+        } catch (error) {
+          setStatus(result, error.message || 'Force deletion failed.', true);
+          button.disabled = false;
+        }
+      }, { danger: true });
+      actions.append(button, result);
     } else {
       note.textContent = canDeleteComp
         ? 'Permanently revoke this active complimentary ticket and delete its order, applicant record, internal review, and invitation. The existing digital ticket link will stop working. This cannot be undone.'
@@ -90,17 +147,7 @@
               confirmEmail: typed.trim()
             })
           });
-
-          state.applications = state.applications.filter((item) => item.id !== application.id);
-          state.selectedId = null;
-          renderStats(applicationStats());
-          renderInviteStats();
-          recomputeTicketStats();
-          renderDetail();
-          setStatus(
-            els.loadStatus,
-            `${response.compTicketRevoked ? 'Revoked the complimentary ticket and deleted' : 'Deleted'} ${application.fullName || response.deletedEmail || 'applicant'}${response.inviteRevoked ? ' and revoked their invitation' : ''}.`
-          );
+          await removeFromUi(application, response);
         } catch (error) {
           setStatus(result, error.message || 'Applicant deletion failed.', true);
           button.disabled = false;
