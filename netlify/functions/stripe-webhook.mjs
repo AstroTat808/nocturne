@@ -96,7 +96,7 @@ async function fulfillBundledWater(event) {
   const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
   const sessionOrder = await orderStore.get(session.id, { type: 'json', consistency: 'strong' });
-  if (!sessionOrder || sessionOrder.status !== 'paid' || !sessionOrder.waterPackageRequested) return;
+  if (!sessionOrder || sessionOrder.status !== 'paid' || !sessionOrder.waterPackageRequested) throw new Error('Bundled water checkout record is unavailable after ticket payment.');
   const paidAt = sessionOrder.paidAt || new Date().toISOString();
   const fields = {
     waterPackageRequested: true,
@@ -117,19 +117,26 @@ async function fulfillBundledWater(event) {
 
   await orderStore.setJSON(session.id, { ...sessionOrder, ...fields, updatedAt: new Date().toISOString() });
   const summaryKey = `submission-${submissionId}`;
+  let summaryUpdated = false;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const entry = await orderStore.getWithMetadata(summaryKey, { type: 'json', consistency: 'strong' });
     if (!entry?.data || entry.data.stripeCheckoutSessionId !== session.id || entry.data.status !== 'paid') break;
-    if (entry.data.waterPackagePurchased) break;
+    if (entry.data.waterPackagePurchased) { summaryUpdated = true; break; }
     const write = await orderStore.setJSON(summaryKey, { ...entry.data, ...fields, updatedAt: new Date().toISOString() }, { onlyIfMatch: entry.etag });
-    if (write.modified) break;
+    if (write.modified) { summaryUpdated = true; break; }
   }
+  if (!summaryUpdated) throw new Error('Bundled water entitlement could not be written to the ticket summary.');
+
+  let reviewUpdated = false;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const entry = await reviewStore.getWithMetadata(submissionId, { type: 'json', consistency: 'strong' });
     if (!entry?.data) break;
+    if (entry.data.waterPackagePurchased && entry.data.waterPackageCheckoutSessionId === session.id) { reviewUpdated = true; break; }
     const write = await reviewStore.setJSON(submissionId, { ...entry.data, ...fields, updatedAt: new Date().toISOString() }, { onlyIfMatch: entry.etag });
-    if (write.modified) break;
+    if (write.modified) { reviewUpdated = true; break; }
   }
+  if (!reviewUpdated) throw new Error('Bundled water entitlement could not be synchronized to the guest review record.');
+
   await writeAudit('water_package.paid', { submissionId, ticketId: sessionOrder.ticketId || null, stripeCheckoutSessionId: session.id, stripePaymentIntentId: session.payment_intent || null, amountTotal: Number(sessionOrder.waterPackagePriceCents || 1500), purchaseType: 'bundled' });
 }
 
@@ -167,10 +174,7 @@ export default async (req) => {
 
   try {
     const response = await stripeWebhookCore(req);
-    if (response.ok && bundledWater) {
-      try { await fulfillBundledWater(event); }
-      catch (error) { console.error('NOCTURNE bundled water fulfillment failed:', error); }
-    }
+    if (response.ok && bundledWater) await fulfillBundledWater(event);
     return response;
   } finally {
     globalThis.fetch = priorFetch;
