@@ -113,6 +113,62 @@ body.private-access-page {
 }
 .private-access-checkout{display:grid;gap:1rem;margin-top:1.4rem}.private-access-checkout .private-access-actions{margin-top:0}.drink-package-option{display:flex;gap:.85rem;align-items:flex-start;padding:1rem;border:1px solid rgba(216,154,43,.25);background:rgba(216,154,43,.04);cursor:pointer}.drink-package-option input{width:1.15rem;height:1.15rem;margin:.15rem 0 0;accent-color:#d89a2b;flex:0 0 auto}.drink-package-option span{display:grid;gap:.35rem}.drink-package-option strong{color:#f4e5ce;font-family:var(--serif);font-size:1.05rem;font-weight:500}.drink-package-option small{color:#9b8e7c;font-size:.68rem;line-height:1.6}
 
+/* Package final-sale acknowledgments on digital-ticket add-on cards. Keep these
+   isolated from the global input rules so a checkbox can never expand like a
+   full-width text field. */
+.ticket-policy-check {
+  display: flex !important;
+  align-items: center;
+  gap: .8rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin: .85rem 0 1rem;
+  padding: .9rem 1rem;
+  border: 1px solid rgba(255,202,97,.34);
+  background: rgba(216,154,43,.055);
+  color: #ead8b9;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ticket-policy-check input[type="checkbox"] {
+  appearance: auto;
+  width: 1.15rem !important;
+  min-width: 1.15rem !important;
+  max-width: 1.15rem !important;
+  height: 1.15rem !important;
+  min-height: 1.15rem !important;
+  max-height: 1.15rem !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0;
+  border-radius: .15rem;
+  background: transparent;
+  box-shadow: none !important;
+  accent-color: #d89a2b;
+  flex: 0 0 1.15rem;
+}
+
+.ticket-policy-check span {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
+  color: #ead8b9;
+  font-size: .78rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ticket-policy-check strong {
+  color: #ffca61;
+  font-weight: 600;
+}
+
+.ticket-policy-check:has(input:focus-visible) {
+  outline: 2px solid rgba(255,202,97,.7);
+  outline-offset: 2px;
+}
+
 .private-access-actions .btn.secondary {
   background: transparent;
   color: var(--champagne);
@@ -184,5 +240,14 @@ body.private-access-page {
 
   .private-access-card h1 {
     font-size: clamp(2.8rem, 13vw, 4.6rem);
+  }
+
+  .ticket-policy-check {
+    gap: .7rem;
+    padding: .8rem .85rem;
+  }
+
+  .ticket-policy-check span {
+    font-size: .74rem;
   }
 }
