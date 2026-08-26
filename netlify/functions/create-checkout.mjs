@@ -1,6 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { randomBytes } from 'node:crypto';
-import { readTicketAccess } from './_ticket-auth.mjs';
+import { makeReentryToken, readTicketAccess } from './_ticket-auth.mjs';
 import { writeAudit } from './_audit.mjs';
 import { drinkPackageConfig, drinkPackageRequested } from './_drink-package.mjs';
 import { waterPackageConfig } from './_water-package.mjs';
@@ -111,9 +111,11 @@ export default async (req) => {
   const currency = String(process.env.NOCTURNE_TICKET_CURRENCY || 'usd').toLowerCase();
   const productName = String(process.env.NOCTURNE_TICKET_NAME || 'NOCTURNE Festival — General Admission').slice(0, 120);
   const baseUrl = siteUrl(req);
+  const returnToken = makeReentryToken(submissionId, 7200);
+  if (!returnToken) return fail(req, 'Secure ticket return could not be initialized.', 503);
   const expectedAmountTotal = unitAmount + (includeDrinkPackage ? packageConfig.priceCents : 0) + (includeWaterPackage ? waterConfig.priceCents : 0);
   const params = {
-    mode: 'payment', success_url: `${baseUrl}/ticket-confirmed?session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${baseUrl}/ticket-access?checkout=cancelled`, client_reference_id: submissionId,
+    mode: 'payment', success_url: `${baseUrl}/ticket-confirmed?session_id={CHECKOUT_SESSION_ID}&return_token=${encodeURIComponent(returnToken)}`, cancel_url: `${baseUrl}/ticket-access?checkout=cancelled`, client_reference_id: submissionId,
     'metadata[submissionId]': submissionId, 'metadata[event]': 'NOCTURNE',
     'metadata[drinkPackage]': includeDrinkPackage ? 'six-credit' : 'none', 'metadata[drinkCredits]': includeDrinkPackage ? String(packageConfig.credits) : '0', 'metadata[drinkPackagePolicyAccepted]': includeDrinkPackage ? 'true' : 'false',
     'metadata[waterPackage]': includeWaterPackage ? 'unlimited' : 'none', 'metadata[waterPackagePolicyAccepted]': includeWaterPackage ? 'true' : 'false',
