@@ -7,6 +7,11 @@
   const webhook = section.querySelector('#launch-stripe-webhook');
   const price = section.querySelector('#launch-stripe-price');
   const ready = section.querySelector('#launch-stripe-ready');
+  const emailDomain = section.querySelector('#launch-email-domain');
+  const reminders = section.querySelector('#launch-reminders');
+  const backups = section.querySelector('#launch-backups');
+  const secrets = section.querySelector('#launch-secrets');
+  const appleWallet = section.querySelector('#launch-apple-wallet');
   const refresh = section.querySelector('#launch-refresh-stripe');
   const clearInvites = section.querySelector('#launch-clear-invites');
   const clearAll = section.querySelector('#launch-clear-all-test-data');
@@ -44,11 +49,18 @@
     try {
       const data = await request();
       const stripe = data.stripe || {};
+      const email = data.email || {};
+      const operations = data.operations || {};
       const displayedMode = stripe.apiMode || stripe.keyMode || 'unknown';
       text(mode, displayedMode === 'live' ? 'LIVE' : displayedMode === 'test' ? 'TEST' : displayedMode.toUpperCase());
       text(webhook, stripe.webhookEndpointConfigured && stripe.webhookEventsConfigured && stripe.webhookSecretConfigured ? 'Configured' : 'Needs attention');
       text(price, money(stripe.priceCents, stripe.currency));
       text(ready, stripe.readyForLive ? 'Ready for final live payment test' : 'Not live-ready');
+      text(emailDomain, email.sendingEnabled ? 'Verified' : email.configured ? (email.domainStatus || 'Needs attention') : 'Not configured');
+      text(reminders, operations.purchaseRemindersEnabled ? 'Enabled' : 'Disabled');
+      text(backups, operations.backupsEnabled ? `${operations.backupRetentionDays || 30} days` : 'Disabled');
+      text(secrets, operations.dedicatedSecretsReady ? 'Separated' : 'Needs attention');
+      text(appleWallet, operations.appleWallet?.configured ? 'Ready' : 'Needs certificate');
       text(status, stripe.error ? `Stripe check: ${stripe.error}` : stripe.readyForLive ? 'Live configuration detected. Complete one small real payment before opening sales.' : 'Stripe is not fully live yet.');
     } catch (error) {
       text(status, error.message || 'Stripe configuration could not be checked.');

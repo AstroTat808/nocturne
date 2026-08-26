@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { createHash } from 'node:crypto';
 import { accessSecret, accessTtlSeconds, makeAccessCookie, makeAccessToken, makeReentryToken, reentryTtlSeconds } from './_ticket-auth.mjs';
+import { writeAudit } from './_audit.mjs';
 
 const STORE_NAME = 'nocturne-invites';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -314,6 +315,10 @@ export default async (req) => {
   }
 
   const confirmation = await sendRedemptionConfirmation(req, invite, usedAt, ticketUrl);
+  await writeAudit('invite.redeemed', {
+    submissionId: invite.sourceSubmissionId || null,
+    confirmationEmailSent: confirmation.sent
+  });
 
   const headers = {};
   if (usingBuiltInAccess) {

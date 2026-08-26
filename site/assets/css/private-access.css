@@ -111,6 +111,7 @@ body.private-access-page {
   flex-wrap: wrap;
   margin-top: 1.8rem;
 }
+.private-access-checkout{display:grid;gap:1rem;margin-top:1.4rem}.private-access-checkout .private-access-actions{margin-top:0}.drink-package-option{display:flex;gap:.85rem;align-items:flex-start;padding:1rem;border:1px solid rgba(216,154,43,.25);background:rgba(216,154,43,.04);cursor:pointer}.drink-package-option input{width:1.15rem;height:1.15rem;margin:.15rem 0 0;accent-color:#d89a2b;flex:0 0 auto}.drink-package-option span{display:grid;gap:.35rem}.drink-package-option strong{color:#f4e5ce;font-family:var(--serif);font-size:1.05rem;font-weight:500}.drink-package-option small{color:#9b8e7c;font-size:.68rem;line-height:1.6}
 
 .private-access-actions .btn.secondary {
   background: transparent;

@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/admin.css">
   <link rel="stylesheet" href="/assets/css/admin-tickets.css">
-  <script src="/assets/js/admin-launch.js?v=20260821b" defer></script>
+  <script src="/assets/js/admin-launch.js?v=20260825c" defer></script>
 </head>
 <body class="admin-body">
   <header class="admin-topbar">
@@ -41,6 +41,19 @@
           <div class="admin-ticket-stat"><span id="launch-stripe-webhook">—</span><small>Webhook</small><em>Live destination + events</em></div>
           <div class="admin-ticket-stat"><span id="launch-stripe-price">—</span><small>Ticket price</small><em>Configured checkout amount</em></div>
           <div class="admin-ticket-stat"><span id="launch-stripe-ready">—</span><small>Readiness</small><em>Final real payment still required</em></div>
+        </div>
+      </section>
+
+      <section class="admin-ticket-overview" aria-labelledby="operations-launch-title">
+        <div class="admin-ticket-overview-head">
+          <div><p class="admin-kicker">Operations</p><h2 id="operations-launch-title">Protection & recovery.</h2></div>
+        </div>
+        <div class="admin-ticket-stats">
+          <div class="admin-ticket-stat"><span id="launch-email-domain">—</span><small>Email domain</small><em>Resend sending status</em></div>
+          <div class="admin-ticket-stat"><span id="launch-reminders">—</span><small>Purchase reminders</small><em>10:00 AM HST daily</em></div>
+          <div class="admin-ticket-stat"><span id="launch-backups">—</span><small>Daily backups</small><em>10:30 AM HST daily</em></div>
+          <div class="admin-ticket-stat"><span id="launch-secrets">—</span><small>Secret separation</small><em>Dedicated admin/ticket keys</em></div>
+          <div class="admin-ticket-stat"><span id="launch-apple-wallet">—</span><small>Apple Wallet</small><em>Pass ID + signing certificates</em></div>
         </div>
       </section>
 

@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { makeTicketToken } from './_ticket-token.mjs';
+import { writeAudit } from './_audit.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -72,6 +73,16 @@ function digitalTicketUrl(req, submissionId, ticketId) {
   return `${site}/ticket?token=${encodeURIComponent(token)}`;
 }
 
+async function expireCheckout(sessionId) {
+  if (!sessionId || !process.env.STRIPE_SECRET_KEY) return;
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams()
+  });
+  if (!response.ok && response.status !== 400) throw new Error(`Stripe checkout expiration returned ${response.status}.`);
+}
+
 async function sendCompEmail(req, application, ticketId, url) {
   if (!process.env.RESEND_API_KEY || !process.env.NOCTURNE_EMAIL_FROM || !application?.email) {
     return { sent: false, reason: 'Email not configured.' };
@@ -86,7 +97,7 @@ async function sendCompEmail(req, application, ticketId, url) {
   const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Complimentary Ticket</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:42px;line-height:1.04;color:#fff3df;margin:16px 0 22px">Your night<br>is on us.</h1><p style="color:#c8baa4;line-height:1.7">${escapeHtml(displayName)}, a complimentary NOCTURNE ticket has been issued for you.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac"><strong>Ticket ID:</strong> ${escapeHtml(ticketId)}<br><strong>Admission:</strong> Complimentary</div><p style="text-align:center;margin:30px 0"><a href="${escapeHtml(url)}" style="display:inline-block;padding:14px 20px;background:#d89a2b;color:#0b0803;text-decoration:none;font-size:12px;letter-spacing:2px;text-transform:uppercase">Open Digital Ticket</a></p><p style="color:#9d907f;line-height:1.7">Keep your digital ticket private. Present its QR code at event check-in.</p><p style="color:#807564;font-size:12px">Need help? <a href="mailto:${escapeHtml(HELP_EMAIL)}" style="color:#ffca61">${escapeHtml(HELP_EMAIL)}</a></p><div style="margin-top:34px;padding-top:20px;border-top:1px solid rgba(216,154,43,.18);color:#74695b;font-size:11px;letter-spacing:1px;text-transform:uppercase">NOCTURNE Festival · Presented by Wild Ones · Hawai‘i</div></div></div></body></html>`;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json', 'Idempotency-Key': `comp-ticket-${ticketId}` },
     body: JSON.stringify({ from: process.env.NOCTURNE_EMAIL_FROM, to: [application.email], subject: 'Your Complimentary NOCTURNE Ticket', html, text })
   });
   const data = await response.json().catch(() => ({}));
@@ -99,11 +110,12 @@ async function issue(req, submissionId) {
   const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
   const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
-  const [application, review, existing] = await Promise.all([
+  const [application, review, existingEntry] = await Promise.all([
     applicationStore.get(submissionId, { type: 'json', consistency: 'strong' }),
     reviewStore.get(submissionId, { type: 'json', consistency: 'strong' }),
-    orderStore.get(`submission-${submissionId}`, { type: 'json', consistency: 'strong' })
+    orderStore.getWithMetadata(`submission-${submissionId}`, { type: 'json', consistency: 'strong' })
   ]);
+  const existing = existingEntry?.data || null;
   if (!application) return json({ error: 'Application not found.' }, 404);
   if (!review || review.status !== 'approved') return json({ error: 'Approve the application before issuing a complimentary ticket.' }, 409);
   if (existing?.status === 'paid' || ['paid', 'checked_in'].includes(review.ticketState)) return json({ error: 'This applicant already has an active ticket.' }, 409);
@@ -113,20 +125,6 @@ async function issue(req, submissionId) {
   const ticketId = `NOC-TKT-COMP-${randomBytes(6).toString('hex').toUpperCase()}`;
   const url = digitalTicketUrl(req, submissionId, ticketId);
   if (!url) return json({ error: 'Digital ticket signing is not configured.' }, 503);
-
-  let emailStatus = 'not_sent';
-  let emailMessageId = null;
-  let emailError = null;
-  try {
-    const sent = await sendCompEmail(req, application, ticketId, url);
-    emailStatus = sent.sent ? 'sent' : 'not_configured';
-    emailMessageId = sent.messageId || null;
-    emailError = sent.reason || null;
-  } catch (error) {
-    console.error('NOCTURNE comp ticket email failed:', error);
-    emailStatus = 'failed';
-    emailError = String(error?.message || error).slice(0, 500);
-  }
 
   const summary = {
     submissionId,
@@ -142,12 +140,21 @@ async function issue(req, submissionId) {
     compIssuedAt: issuedAt,
     digitalTicketUrl: url,
     checkedInAt: null,
-    ticketEmailStatus: emailStatus,
-    ticketEmailMessageId: emailMessageId,
-    ticketEmailError: emailError,
+    ticketEmailStatus: 'pending',
+    ticketEmailMessageId: null,
+    ticketEmailError: null,
     updatedAt: issuedAt
   };
-  await orderStore.setJSON(`submission-${submissionId}`, summary);
+  if (existing?.status === 'checkout_created' && existing.stripeCheckoutSessionId) {
+    await expireCheckout(existing.stripeCheckoutSessionId).catch((error) => console.error('NOCTURNE old checkout expiration failed:', error));
+  }
+  const summaryWrite = await orderStore.setJSON(
+    `submission-${submissionId}`,
+    summary,
+    existingEntry ? { onlyIfMatch: existingEntry.etag } : { onlyIfNew: true }
+  );
+  if (!summaryWrite.modified) return json({ error: 'This ticket record changed while the complimentary ticket was being issued. Refresh and try again.' }, 409);
+
   const updatedReview = {
     ...review,
     ticketState: 'paid',
@@ -159,14 +166,36 @@ async function issue(req, submissionId) {
     stripeCheckoutSessionId: null,
     stripePaymentIntentId: null,
     checkedInAt: null,
-    ticketEmailStatus: emailStatus,
-    ticketEmailSentAt: emailStatus === 'sent' ? issuedAt : null,
-    ticketEmailMessageId: emailMessageId,
-    ticketEmailError: emailError,
+    ticketEmailStatus: 'pending',
+    ticketEmailSentAt: null,
+    ticketEmailMessageId: null,
+    ticketEmailError: null,
     updatedAt: issuedAt
   };
   await reviewStore.setJSON(submissionId, updatedReview);
-  return json({ ok: true, ticket: summary, review: updatedReview, recipient: application.email || null });
+  await writeAudit('comp_ticket.issued', { submissionId, ticketId });
+
+  let emailStatus = 'not_configured';
+  let emailMessageId = null;
+  let emailError = null;
+  try {
+    const sent = await sendCompEmail(req, application, ticketId, url);
+    emailStatus = sent.sent ? 'sent' : 'not_configured';
+    emailMessageId = sent.messageId || null;
+    emailError = sent.reason || null;
+  } catch (error) {
+    console.error('NOCTURNE comp ticket email failed:', error);
+    emailStatus = 'failed';
+    emailError = String(error?.message || error).slice(0, 500);
+  }
+
+  const completedAt = new Date().toISOString();
+  const completedSummary = { ...summary, ticketEmailStatus: emailStatus, ticketEmailMessageId: emailMessageId, ticketEmailError: emailError, updatedAt: completedAt };
+  const completedReview = { ...updatedReview, ticketEmailStatus: emailStatus, ticketEmailSentAt: emailStatus === 'sent' ? completedAt : null, ticketEmailMessageId: emailMessageId, ticketEmailError: emailError, updatedAt: completedAt };
+  await orderStore.setJSON(`submission-${submissionId}`, completedSummary);
+  await reviewStore.setJSON(submissionId, completedReview);
+  await writeAudit(emailStatus === 'sent' ? 'comp_ticket.email_sent' : 'comp_ticket.email_failed', { submissionId, ticketId, messageId: emailMessageId, error: emailError });
+  return json({ ok: true, ticket: completedSummary, review: completedReview, recipient: application.email || null });
 }
 
 async function resend(req, submissionId) {

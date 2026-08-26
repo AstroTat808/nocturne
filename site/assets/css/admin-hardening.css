@@ -1,0 +1,174 @@
+.admin-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .6rem;
+}
+
+.admin-brand {
+  width: 150px;
+  flex: 0 0 auto;
+  line-height: 0;
+}
+
+.admin-brand .admin-brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  mix-blend-mode: normal;
+  filter: none;
+}
+
+.admin-footer {
+  display: grid;
+  justify-items: center;
+  gap: .65rem;
+  padding: 2rem 1rem 2.4rem;
+  border-top: 1px solid rgba(216, 154, 43, .18);
+  background: rgba(3, 3, 3, .9);
+  text-align: center;
+}
+
+.admin-footer-brand {
+  display: block;
+  width: min(260px, 68vw);
+  line-height: 0;
+}
+
+.admin-footer-brand img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  filter: none;
+}
+
+.admin-footer p {
+  margin: 0;
+  color: #786e61;
+  font-size: .58rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.admin-operations-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-reminder-test {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+  gap: 1.5rem;
+  align-items: center;
+  margin: 1.25rem 0;
+  padding: 1.35rem;
+  border: 1px solid rgba(216, 154, 43, .28);
+  background: rgba(216, 154, 43, .045);
+}
+
+.admin-reminder-test h2,
+.admin-reminder-test p {
+  margin-top: .35rem;
+}
+
+.admin-reminder-test-form {
+  display: grid;
+  gap: .7rem;
+}
+
+.admin-reminder-test-form label span {
+  display: block;
+  margin-bottom: .35rem;
+  color: #aa9c88;
+  font-size: .65rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.admin-reminder-test-form input {
+  width: 100%;
+}
+
+.admin-filter-count {
+  display: flex;
+  align-items: baseline;
+  gap: .65rem;
+  margin: .8rem 0 1rem;
+  color: #9d907f;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.admin-filter-count strong {
+  color: #ffca61;
+  font-family: Georgia, serif;
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.admin-filter-count span {
+  font-size: .7rem;
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: 1rem;
+  border-top: 1px solid rgba(216, 154, 43, .14);
+}
+
+.admin-pagination span {
+  color: #918574;
+  font-size: .65rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.admin-pagination .admin-outline-button {
+  min-height: 36px;
+  padding: .55rem .7rem;
+}
+
+.admin-ticket-state[data-state="disputed"] {
+  border-color: rgba(217, 113, 92, .65);
+  color: #f0a99a;
+}
+
+.admin-ticket-state[data-state="checkout_expired"] {
+  border-color: rgba(140, 126, 107, .45);
+  color: #a99b87;
+}
+
+@media (max-width: 680px) {
+  .admin-brand {
+    width: 112px;
+  }
+
+  .admin-heading-actions {
+    justify-content: flex-start;
+  }
+
+  .admin-heading-actions .admin-outline-button {
+    width: 100%;
+  }
+
+  .admin-reminder-test {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .admin-operations-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .admin-operations-nav {
+    grid-template-columns: 1fr;
+  }
+}

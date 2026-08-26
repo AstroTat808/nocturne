@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { makeTicketToken } from './_ticket-token.mjs';
+import { readTicketAccess } from './_ticket-auth.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 
@@ -61,6 +62,13 @@ export default async (req) => {
   if (req.method !== 'GET') return new Response('Method not allowed.', { status: 405 });
 
   const url = new URL(req.url);
+  const access = readTicketAccess(req);
+  if (!access) {
+    return new Response(page({ message: 'Private ticket access has expired. Use the secure link from your NOCTURNE email to return.' }), {
+      status: 401,
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow,noarchive', 'Referrer-Policy': 'no-referrer' }
+    });
+  }
   const sessionId = String(url.searchParams.get('session_id') || '').trim();
   if (!/^cs_(test_|live_)?[A-Za-z0-9_]{10,}$/.test(sessionId)) {
     return new Response(page({ message: 'The checkout session ID is missing or invalid.' }), {
@@ -71,6 +79,13 @@ export default async (req) => {
 
   const store = getStore({ name: ORDER_STORE, consistency: 'strong' });
   const order = await store.get(sessionId, { type: 'json', consistency: 'strong' });
+
+  if (order && order.submissionId !== access.submissionId) {
+    return new Response(page({ message: 'This confirmation does not belong to the current private access session.' }), {
+      status: 403,
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow,noarchive', 'Referrer-Policy': 'no-referrer' }
+    });
+  }
 
   let html;
   let status = 200;

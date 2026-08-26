@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { readTicketAccess } from './_ticket-auth.mjs';
+import { drinkPackageConfig } from './_drink-package.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 
@@ -23,7 +24,12 @@ function formattedPrice() {
   return `${currency} ${amount.toFixed(2)}`;
 }
 
-function renderPage({ paid = false, ticketId = '', checkoutMessage = '' } = {}) {
+function formattedPackagePrice() {
+  const amount = drinkPackageConfig().priceCents / 100;
+  return `$${amount.toFixed(0)}`;
+}
+
+function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMessage = '' } = {}) {
   const configured = checkoutConfigured();
   const ticketName = escapeHtml(process.env.NOCTURNE_TICKET_NAME || 'NOCTURNE Festival — General Admission');
 
@@ -35,10 +41,15 @@ function renderPage({ paid = false, ticketId = '', checkoutMessage = '' } = {}) 
     lead = 'Your invitation has been redeemed and your NOCTURNE ticket purchase is confirmed.';
     status = `<div class="private-access-status"><strong>Ticket confirmed.</strong><br>Ticket ID: ${escapeHtml(ticketId || 'Registered')}</div>`;
     actions = '<div class="private-access-actions"><a class="btn" href="/">Return to NOCTURNE</a><a class="btn secondary" href="https://instagram.com/nocturnehawaii" target="_blank" rel="noopener noreferrer">Follow @nocturnehawaii</a></div>';
+  } else if (blocked) {
+    lead = 'This invitation has a protected ticket or payment record that requires review by the NOCTURNE team.';
+    status = '<div class="private-access-status"><strong>Ticket access unavailable.</strong><br>Contact NOCTURNE support for assistance.</div>';
+    actions = '<div class="private-access-actions"><a class="btn" href="mailto:help@nocturnefestival.com">Contact Support →</a><a class="btn secondary" href="/">Return to NOCTURNE</a></div>';
   } else if (configured) {
     lead = 'Your invitation has been successfully redeemed. Your private ticket checkout is now available.';
     status = `<div class="private-access-status"><strong>${ticketName}</strong><br>${formattedPrice()} · One ticket per approved invitation</div>`;
-    actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-actions"><button class="btn" type="submit">Purchase Private Ticket →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></form>`;
+    const packageOption = drinkPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="drink_package" value="yes"><span><strong>I am 21+ — Add the Six-Drink Package · ${formattedPackagePrice()}</strong><small>Six credits for beer or well cocktails. Premium cocktails use one credit plus a $5 upgrade paid at the bar. Valid photo ID and event wristband required. Non-transferable; unused credits expire when event bar service ends. Service may be refused.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>Refund policy:</strong> The drink package is refundable only before the first drink credit is redeemed. Once any drink is redeemed, the entire package becomes non-refundable and no prorated refund is available.</small></span></label>` : '';
+    actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-checkout">${packageOption}<div class="private-access-actions"><button class="btn" type="submit">Continue to Stripe →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></div></form>`;
   } else {
     lead = 'Your invitation was successfully redeemed. The private ticket checkout is not live yet, so there is nothing else you need to do right now.';
     status = '<div class="private-access-status"><strong>Private ticket access is being prepared.</strong><br>Approved guests will receive the next instructions when checkout opens.</div>';
@@ -70,7 +81,7 @@ function renderPage({ paid = false, ticketId = '', checkoutMessage = '' } = {}) 
       <p>${escapeHtml(lead)}</p>
       ${message}
       ${status}
-      <p>${paid ? 'Your purchase is recorded in the NOCTURNE guest system. Keep your confirmation email for your records.' : configured ? 'Checkout is processed securely by Stripe. Your approved invitation permits one ticket purchase.' : 'Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.'}</p>
+      <p>${paid ? 'Your purchase is recorded in the NOCTURNE guest system. Keep your confirmation email for your records.' : blocked ? 'A refunded or disputed payment cannot be replaced through the private checkout without administrative review.' : configured ? 'Checkout is processed securely by Stripe. Your approved invitation permits one ticket purchase and, if selected, one drink package.' : 'Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.'}</p>
       ${actions}
     </section>
   </main>
@@ -102,6 +113,7 @@ export default async (req) => {
 
   return new Response(renderPage({
     paid: order?.status === 'paid',
+    blocked: ['refunded', 'disputed'].includes(String(order?.status || '').toLowerCase()),
     ticketId: order?.ticketId || '',
     checkoutMessage
   }), {
@@ -109,7 +121,7 @@ export default async (req) => {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
-      'X-Robots-Tag': 'noindex, nofollow, noarchive'
+      'X-Robots-Tag': 'noindex, nofollow,noarchive'
     }
   });
 };

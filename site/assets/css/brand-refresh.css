@@ -1,0 +1,116 @@
+/* NOCTURNE brand artwork supplied by the event team.
+   The image itself is not altered here: no crop, transparency treatment,
+   recoloring, blending, glow, or filters. Only responsive sizing is applied. */
+.site-header {
+  min-height: 82px;
+  padding-top: .38rem;
+  padding-bottom: .38rem;
+}
+
+.site-header .brand {
+  display: block;
+  flex: 0 0 auto;
+  width: 140px;
+  aspect-ratio: 2048 / 745;
+  height: auto;
+  padding: 0;
+  background: url('/assets/images/nocturne-logo-wordmark.png') center / contain no-repeat;
+  line-height: 0;
+}
+
+.site-header .brand::before,
+.site-header .brand > img,
+.site-header .brand > span {
+  display: none !important;
+}
+
+.site-header .nav {
+  margin-left: auto;
+  align-self: center;
+}
+
+.hero-lockup {
+  position: relative;
+  width: min(700px, 100%);
+  aspect-ratio: 1774 / 887;
+  margin: -.35rem 0 .45rem;
+  background: url('/assets/images/nocturne-logo-hero.png') left center / contain no-repeat;
+  filter: none;
+}
+
+.hero-lockup::before {
+  display: none !important;
+}
+
+.hero-lockup .hero-logo {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  mix-blend-mode: normal !important;
+  filter: none !important;
+}
+
+.footer-brand-lockup {
+  display: block;
+  width: min(310px, 78vw);
+  aspect-ratio: 2048 / 745;
+  margin: 0 0 1rem;
+  background: url('/assets/images/nocturne-logo-wordmark.png') left center / contain no-repeat;
+}
+
+.footer-brand-lockup > * {
+  display: none !important;
+}
+
+@media (max-width: 980px) {
+  .site-header .brand {
+    width: 120px;
+  }
+
+  .hero-lockup {
+    width: min(590px, 100%);
+  }
+}
+
+@media (max-width: 760px) {
+  .site-header {
+    min-height: 68px;
+    gap: .75rem;
+    padding-top: .35rem;
+    padding-bottom: .35rem;
+  }
+
+  .site-header .brand {
+    width: 112px;
+  }
+
+  .site-header .menu-toggle {
+    margin-left: auto;
+  }
+
+  .hero-lockup {
+    width: min(470px, 100%);
+    margin: -.1rem 0 .5rem;
+  }
+
+  .footer-brand-lockup {
+    width: min(280px, 76vw);
+  }
+}
+
+@media (max-width: 430px) {
+  .site-header .brand {
+    width: 104px;
+  }
+
+  .hero-lockup {
+    width: 100%;
+  }
+
+  .footer-brand-lockup {
+    width: min(250px, 74vw);
+  }
+}

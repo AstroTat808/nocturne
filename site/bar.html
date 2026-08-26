@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#030303">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Bartender Console | NOCTURNE</title>
+  <link rel="icon" href="/assets/images/favicon.png">
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <link rel="stylesheet" href="/assets/css/check-in.css">
+  <link rel="stylesheet" href="/assets/css/bar.css">
+  <script src="/assets/vendor/html5-qrcode.min.js" defer></script>
+  <script src="/assets/js/bar.js" defer></script>
+</head>
+<body class="checkin-body">
+  <main class="checkin-shell">
+    <section id="bar-login" class="checkin-panel">
+      <img class="checkin-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival" width="1536" height="768">
+      <p class="section-kicker">Private Operations</p><h1>Bar<br>console.</h1>
+      <p>Authorized bartenders only. Responsible-service discretion always applies.</p>
+      <form id="bar-login-form" class="checkin-form">
+        <input name="staffName" type="text" autocomplete="name" placeholder="Bartender name" required maxlength="80">
+        <input name="password" type="password" autocomplete="current-password" placeholder="Bar password" required>
+        <button class="btn" type="submit">Open Bar Console →</button>
+      </form>
+      <p id="bar-login-status" class="checkin-status" role="status"></p><a class="checkin-back-link" href="/admin">← Admin dashboard</a>
+    </section>
+
+    <section id="bar-console" class="checkin-panel checkin-console" hidden>
+      <div class="checkin-head"><div><p class="section-kicker">NOCTURNE Bar</p><h1>Scan band.</h1><small id="bar-staff"></small></div><div class="checkin-head-actions"><a href="/admin">Admin</a><button id="bar-logout" class="checkin-text-button" type="button">Sign out</button></div></div>
+      <div id="bar-scanner-frame" class="scanner-frame" data-mode="idle"><div id="bar-reader" class="checkin-reader" aria-label="QR camera scanner"></div><div class="scanner-target" aria-hidden="true"></div></div>
+      <div class="checkin-actions"><button id="bar-start-scanner" class="btn" type="button">Start Camera Scanner</button><button id="bar-stop-scanner" class="btn secondary" type="button" hidden>Stop Camera</button><button id="bar-scan-image" class="btn secondary" type="button">Scan QR From Photo</button><input id="bar-image-input" type="file" accept="image/*" hidden></div>
+      <form id="bar-lookup-form" class="checkin-form manual-checkin-form"><label for="bar-code">Ticket URL/token or wristband QR</label><input id="bar-code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scan or enter code"><button class="btn secondary" type="submit">Look Up Package</button></form>
+      <section id="bar-result" class="bar-result" data-state="idle" aria-live="polite"><strong>READY</strong><span>Scan a ticket to activate a wristband, or scan an active wristband to redeem.</span></section>
+
+      <form id="bar-activate-form" class="bar-action-panel" hidden>
+        <h2>Activate wristband</h2><p id="bar-activate-guest"></p>
+        <label for="bar-wristband">Unique wristband QR or serial</label><input id="bar-wristband" name="wristband" type="text" autocomplete="off" required minlength="6">
+        <label class="bar-check"><input id="bar-age-verified" type="checkbox" required><span>I checked this guest's valid 21+ photo ID and attached this wristband to them.</span></label>
+        <button class="btn" type="submit">Activate Six Credits</button>
+      </form>
+
+      <section id="bar-redeem-panel" class="bar-action-panel" hidden>
+        <h2 id="bar-guest">Guest</h2><div class="bar-balance"><strong id="bar-remaining">0</strong><span>credits remaining</span></div><p id="bar-last-redemption"></p>
+        <div class="bar-drinks"><button type="button" data-drink="beer">Beer · 1 credit</button><button type="button" data-drink="well">Well cocktail · 1 credit</button><button type="button" data-drink="premium">Premium · 1 credit + $5</button><button type="button" data-drink="nonalcoholic">Non-alcoholic · 1 credit</button></div>
+        <label id="premium-confirm" class="bar-check" hidden><input id="premium-paid" type="checkbox"><span>I collected the $5 premium upgrade.</span></label>
+        <p class="bar-policy">One redemption per transaction. The bartender may refuse service regardless of remaining credits.</p>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

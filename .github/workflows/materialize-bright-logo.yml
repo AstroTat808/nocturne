@@ -1,0 +1,50 @@
+name: Materialize bright NOCTURNE logo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/materialize-bright-logo.yml'
+      - '.github/logo-source/nocturne-logo-bright-*.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rebuild transparent WebP
+        shell: bash
+        run: |
+          mkdir -p site/assets/images
+          {
+            cat .github/logo-source/nocturne-logo-bright-01.b64
+            cat .github/logo-source/nocturne-logo-bright-01b.b64
+            head -c 18000 .github/logo-source/nocturne-logo-bright-02.b64
+            cat .github/logo-source/nocturne-logo-bright-03a.b64
+            cat .github/logo-source/nocturne-logo-bright-03b.b64
+            cat .github/logo-source/nocturne-logo-bright-03c.b64
+            head -c 18000 .github/logo-source/nocturne-logo-bright-04.b64
+            head -c 15368 .github/logo-source/nocturne-logo-bright-05.b64
+          } | tr -d '\n\r ' | base64 --decode > site/assets/images/nocturne-logo-bright.webp
+          test "$(wc -c < site/assets/images/nocturne-logo-bright.webp | tr -d ' ')" = "65524"
+          test "$(sha256sum site/assets/images/nocturne-logo-bright.webp | awk '{print $1}')" = "4ded5d049eb202f953733b68a3c206d57d34369cc107536d3bf9757acf52e454"
+
+      - name: Commit transparent logo asset
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/assets/images/nocturne-logo-bright.webp
+          if git diff --cached --quiet; then
+            echo "Bright NOCTURNE logo already materialized."
+            exit 0
+          fi
+          git commit -m "Add transparent bright NOCTURNE logo"
+          git push

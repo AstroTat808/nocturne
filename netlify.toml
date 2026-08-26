@@ -6,6 +6,9 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."ticket-wallet"]
+  included_files = ["netlify/functions/wallet-assets/**"]
+
 [[redirects]]
   from = "https://www.nocturnefestival.com/*"
   to = "https://nocturnefestival.com/:splat"
@@ -32,13 +35,19 @@
 
 [[redirects]]
   from = "/api/stripe/webhook"
-  to = "/.netlify/functions/stripe-webhook"
+  to = "/.netlify/functions/stripe-webhook-router"
   status = 200
   force = true
 
 [[redirects]]
   from = "/api/check-in"
   to = "/.netlify/functions/check-in"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/bar"
+  to = "/.netlify/functions/bar"
   status = 200
   force = true
 
@@ -57,6 +66,12 @@
 [[redirects]]
   from = "/api/admin/applications"
   to = "/.netlify/functions/admin-applications"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/delete-application"
+  to = "/.netlify/functions/admin-delete-application"
   status = 200
   force = true
 
@@ -81,6 +96,18 @@
 [[redirects]]
   from = "/api/admin/approval-email"
   to = "/.netlify/functions/admin-approval-email"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin/drink-package-offer"
+  to = "/.netlify/functions/admin-drink-package-offer"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ticket/water"
+  to = "/.netlify/functions/ticket-water"
   status = 200
   force = true
 
@@ -115,6 +142,36 @@
   force = true
 
 [[redirects]]
+  from = "/ticket/drinks/checkout"
+  to = "/.netlify/functions/create-drink-package-checkout"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/drinks/confirmed"
+  to = "/.netlify/functions/drink-package-confirmed"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/water/checkout"
+  to = "/.netlify/functions/create-water-package-checkout"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/water/confirmed"
+  to = "/.netlify/functions/water-package-confirmed"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/wallet"
+  to = "/.netlify/functions/ticket-wallet"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/ticket"
   to = "/.netlify/functions/ticket-view"
   status = 200
@@ -123,6 +180,11 @@
 [[redirects]]
   from = "/check-in"
   to = "/check-in.html"
+  status = 200
+
+[[redirects]]
+  from = "/bar"
+  to = "/bar.html"
   status = 200
 
 [[redirects]]
@@ -203,6 +265,14 @@
 
 [[headers]]
   for = "/check-in*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    Permissions-Policy = "camera=(self), microphone=(), geolocation=(), payment=()"
+    Content-Security-Policy = "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
+
+[[headers]]
+  for = "/bar*"
   [headers.values]
     Cache-Control = "no-store"
     X-Robots-Tag = "noindex, nofollow, noarchive"

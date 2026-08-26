@@ -1,14 +1,24 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { appleWalletStatus } from './_apple-wallet.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
 const INVITE_STORE = 'nocturne-invites';
 const ORDER_STORE = 'nocturne-ticket-orders';
+const STRIPE_EVENT_STORE = 'nocturne-stripe-events';
+const EMAIL_EVENT_STORE = 'nocturne-email-events';
+const DRINK_REDEMPTION_STORE = 'nocturne-drink-redemptions';
 const SESSION_COOKIE = 'nocturne_admin';
 const REQUIRED_WEBHOOK_EVENTS = new Set([
   'checkout.session.completed',
-  'checkout.session.async_payment_succeeded'
+  'checkout.session.async_payment_succeeded',
+  'checkout.session.async_payment_failed',
+  'checkout.session.expired',
+  'charge.refunded',
+  'refund.updated',
+  'charge.dispute.created',
+  'charge.dispute.closed'
 ]);
 
 function json(data, status = 200) {
@@ -143,6 +153,50 @@ async function stripeStatus() {
   return result;
 }
 
+async function emailStatus() {
+  const configured = Boolean(process.env.RESEND_API_KEY && process.env.NOCTURNE_EMAIL_FROM);
+  const from = String(process.env.NOCTURNE_EMAIL_FROM || '');
+  const domainName = /@([^>\s]+)/.exec(from)?.[1]?.toLowerCase() || '';
+  const result = { configured, domainName, domainFound: false, domainStatus: null, sendingEnabled: false, error: null };
+  if (!configured || !domainName) return result;
+  try {
+    const response = await fetch('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || `Resend returned ${response.status}.`);
+    const domain = Array.isArray(data.data) ? data.data.find((item) => String(item?.name || '').toLowerCase() === domainName) : null;
+    result.domainFound = Boolean(domain);
+    result.domainStatus = domain?.status || null;
+    result.sendingEnabled = domain?.capabilities?.sending === 'enabled' || domain?.status === 'verified';
+  } catch (error) {
+    result.error = String(error?.message || error).slice(0, 300);
+  }
+  return result;
+}
+
+function operationsStatus() {
+  const dedicatedSecrets = {
+    adminSession: Boolean(process.env.NOCTURNE_ADMIN_SESSION_SECRET),
+    checkinKey: Boolean(process.env.NOCTURNE_CHECKIN_KEY),
+    checkinSession: Boolean(process.env.NOCTURNE_CHECKIN_SESSION_SECRET),
+    barKey: Boolean(process.env.NOCTURNE_BAR_KEY),
+    barSession: Boolean(process.env.NOCTURNE_BAR_SESSION_SECRET),
+    ticketQr: Boolean(process.env.NOCTURNE_TICKET_QR_SECRET),
+    ticketAccess: Boolean(process.env.NOCTURNE_TICKET_ACCESS_SECRET)
+  };
+  return {
+    purchaseRemindersEnabled: String(process.env.NOCTURNE_PURCHASE_REMINDERS_ENABLED || '').toLowerCase() === 'true'
+      && String(process.env.NOCTURNE_PURCHASE_REMINDERS_MODE || 'test').toLowerCase() === 'live',
+    purchaseReminderSchedule: '10:00 AM HST daily',
+    backupsEnabled: true,
+    backupSchedule: '10:30 AM HST daily',
+    backupRetentionDays: Math.max(7, Math.min(Number(process.env.NOCTURNE_BACKUP_RETENTION_DAYS || 30), 365)),
+    opsAlertsConfigured: Boolean((process.env.NOCTURNE_OPS_ALERT_TO || process.env.NOCTURNE_APPLICATION_NOTIFY_TO) && process.env.RESEND_API_KEY && process.env.NOCTURNE_EMAIL_FROM),
+    appleWallet: appleWalletStatus(),
+    dedicatedSecrets,
+    dedicatedSecretsReady: Object.values(dedicatedSecrets).every(Boolean)
+  };
+}
+
 function withoutInviteFields(review = {}) {
   const next = { ...review };
   for (const field of [
@@ -216,6 +270,9 @@ async function clearAllTestData() {
   // deleteAll() for these site-wide stores with a 403.
   const deletedInvites = await deleteStoreEntries(INVITE_STORE);
   const deletedOrders = await deleteStoreEntries(ORDER_STORE);
+  const deletedStripeEvents = await deleteStoreEntries(STRIPE_EVENT_STORE);
+  const deletedEmailEvents = await deleteStoreEntries(EMAIL_EVENT_STORE);
+  const deletedDrinkRedemptions = await deleteStoreEntries(DRINK_REDEMPTION_STORE);
   const deletedReviews = await deleteStoreEntries(REVIEW_STORE);
   const deletedApplications = await deleteStoreEntries(APPLICATION_STORE);
 
@@ -224,7 +281,10 @@ async function clearAllTestData() {
     deletedReviews,
     deletedInvites,
     deletedOrders,
-    totalDeleted: deletedApplications + deletedReviews + deletedInvites + deletedOrders
+    deletedStripeEvents,
+    deletedEmailEvents,
+    deletedDrinkRedemptions,
+    totalDeleted: deletedApplications + deletedReviews + deletedInvites + deletedOrders + deletedStripeEvents + deletedEmailEvents + deletedDrinkRedemptions
   };
 }
 
@@ -232,7 +292,8 @@ export default async (req) => {
   if (!authenticated(req)) return json({ error: 'Unauthorized.' }, 401);
 
   if (req.method === 'GET') {
-    return json({ stripe: await stripeStatus() });
+    const [stripe, email] = await Promise.all([stripeStatus(), emailStatus()]);
+    return json({ stripe, email, operations: operationsStatus() });
   }
 
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);

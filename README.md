@@ -24,8 +24,15 @@ A production-ready static NOCTURNE Festival website designed for GitHub + Netlif
 
 Create these in the Netlify project UI under environment variables. Do not commit them to GitHub.
 
-- `NOCTURNE_ADMIN_KEY` — a long random secret used only by the private invite-generation endpoint.
-- `NOCTURNE_TICKET_URL` — the HTTPS private ticket purchase URL returned after a valid invite is redeemed.
+- `NOCTURNE_ADMIN_KEY` — a long random secret used only for admin authentication.
+- `NOCTURNE_ADMIN_SESSION_SECRET`, `NOCTURNE_CHECKIN_KEY`, `NOCTURNE_CHECKIN_SESSION_SECRET`, `NOCTURNE_BAR_KEY`, `NOCTURNE_BAR_SESSION_SECRET`, `NOCTURNE_TICKET_QR_SECRET`, and `NOCTURNE_TICKET_ACCESS_SECRET` — separate long secrets for each trust boundary.
+- `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` — matching live or test Stripe credentials. The admin launch page reports the detected mode.
+- `RESEND_API_KEY` and `NOCTURNE_EMAIL_FROM` — transactional email credentials and the verified sender.
+- `NOCTURNE_OPS_ALERT_TO` — destination for payment, reminder, and backup failure alerts.
+- `NOCTURNE_APPLE_PASS_TYPE_ID`, `NOCTURNE_APPLE_TEAM_ID`, `NOCTURNE_APPLE_WWDR_CERT_BASE64`, `NOCTURNE_APPLE_PASS_CERT_BASE64`, and `NOCTURNE_APPLE_PASS_KEY_BASE64` — Apple Wallet pass identity and signing material. The private key and certificates must remain Netlify secrets.
+- `NOCTURNE_PURCHASE_REMINDERS_ENABLED` and `NOCTURNE_PURCHASE_REMINDERS_MODE` — bulk reminders run daily at 10:00 AM HST only when these are explicitly set to `true` and `live`. Keep them `false` and `test` during the controlled one-applicant test.
+
+`NOCTURNE_TICKET_URL` is now only a legacy external-provider override. Leave it unset to use the built-in Stripe checkout.
 
 For stronger control, the admin endpoint also supports attaching a specific `purchaseUrl` to an invite batch, so individual ticketing links can be mapped to invitation codes instead of using the global URL.
 
@@ -98,3 +105,15 @@ Search the codebase for these items and replace/update as needed:
 - any announced date, venue, age restriction, lineup, sponsors, or partner policies
 
 The Instagram link is already set to `@nocturnehawaii`.
+
+## 8. Production operations
+
+- The admin dashboard can send the real purchase-reminder email to one exact redeemed, unpaid applicant for a controlled test. This does not activate or contact the bulk audience.
+- `daily-purchase-reminders` follows up with approved guests who redeemed an invitation at least 20 hours earlier but have no paid, complimentary, refunded, disputed, or checked-in ticket. It sends at most once per Hawai‘i calendar day and stops when the event begins. It remains paused unless both reminder rollout variables explicitly enable live mode.
+- `daily-data-backup` snapshots applications, reviews, invitations, ticket records, and the audit log at 10:30 AM HST. Backups are retained for 30 days by default.
+- The Stripe webhook uses replay protection and handles completed, failed, and expired Checkout Sessions, full refunds, and disputes. Configure every event listed on the admin launch page.
+- The optional $55 six-credit package is included in the same Stripe Checkout as admission. Bartenders use `/bar` to verify 21+ ID, bind the package to a unique preprinted wristband QR/serial, and deduct credits. Each premium redemption requires confirmation that the $5 upgrade was collected; redemptions within 45 minutes require a deliberate override.
+- Existing paid and complimentary ticket holders who did not buy the package initially can add it from their valid digital ticket. The add-on uses a separate Stripe Checkout and payment record, cannot be purchased twice, and leaves admission active if only the package payment is later refunded or disputed.
+- Valid digital ticket pages offer a signed Apple Wallet event pass when the Wallet credentials are configured. The Wallet QR points back to the same live ticket URL, so refunded, disputed, revoked, and already-used tickets remain subject to server-side admission checks.
+- The operations dashboard reports packages sold, activation state, remaining/redeemed credits, drink mix, package revenue, and recorded premium upgrades. It provides separate CSV exports for applications, the audit trail, and drink redemptions.
+- Run `npm run preflight` to verify private venue details remain outside public assets, local asset references resolve, private pages stay `noindex`, scheduled jobs remain configured, and security headers are present.

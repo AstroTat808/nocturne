@@ -11,17 +11,23 @@
   <link rel="stylesheet" href="/assets/css/admin.css">
   <link rel="stylesheet" href="/assets/css/admin-invites.css">
   <link rel="stylesheet" href="/assets/css/admin-tickets.css">
+  <link rel="stylesheet" href="/assets/css/admin-hardening.css?v=20260824b">
+  <link rel="stylesheet" href="/assets/css/admin-drinks.css?v=20260825a">
   <script src="/assets/js/admin-auth-router.js?v=20260821h" defer></script>
-  <script src="/assets/js/admin.js?v=20260821h" defer></script>
+  <script src="/assets/js/admin-drinks.js?v=20260825a" defer></script>
+  <script src="/assets/js/admin.js?v=20260825d" defer></script>
   <script src="/assets/js/admin-comp.js?v=20260821h" defer></script>
   <script src="/assets/js/admin-email.js?v=20260821h" defer></script>
-  <script src="/assets/js/admin-refund.js?v=20260821h" defer></script>
+  <script src="/assets/js/admin-refund.js?v=20260825e" defer></script>
+  <script src="/assets/js/admin-delete.js?v=20260824a" defer></script>
+  <script src="/assets/js/admin-export.js?v=20260824a" defer></script>
+  <script src="/assets/js/admin-pagination.js?v=20260824b" defer></script>
+  <script src="/assets/js/admin-reminder-test.js?v=20260824a" defer></script>
 </head>
 <body class="admin-body">
   <header class="admin-topbar">
     <a class="admin-brand" href="/" aria-label="NOCTURNE Festival home">
-      <img src="/assets/images/favicon.png" alt="" width="52" height="52">
-      <span><strong>NOCTURNE</strong><small>Wild Ones operations desk</small></span>
+      <img class="admin-brand-logo" src="/assets/images/nocturne-logo-wordmark.png" alt="NOCTURNE Festival" width="2048" height="745">
     </a>
     <div class="admin-top-actions">
       <a class="admin-checkin-link" href="/check-in">Event check-in ↗</a>
@@ -50,14 +56,42 @@
           <h1>Guest operations.</h1>
           <p class="admin-muted">Review applicants, manage invitation codes, track ticket sales, issue complimentary tickets, resend digital tickets, process eligible refunds, and monitor event check-in.</p>
         </div>
-        <button id="admin-refresh" class="admin-outline-button" type="button">Refresh dashboard</button>
+        <div class="admin-heading-actions">
+          <button id="admin-export-applications" class="admin-outline-button" type="button">Export applications CSV</button>
+          <button id="admin-export-audit" class="admin-outline-button" type="button">Export audit CSV</button>
+          <button id="admin-export-drinks" class="admin-outline-button" type="button">Export drink redemptions</button>
+          <button id="admin-refresh" class="admin-outline-button" type="button">Refresh dashboard</button>
+        </div>
       </div>
 
       <nav class="admin-operations-nav" aria-label="NOCTURNE operations">
         <a class="admin-operation-card primary" href="/check-in"><strong>Event Check-In</strong><span>Open mobile QR scanner →</span></a>
+        <a class="admin-operation-card primary" href="/bar"><strong>Bartender Console</strong><span>Activate bands &amp; redeem credits →</span></a>
         <a class="admin-operation-card" href="/invite" target="_blank" rel="noopener noreferrer"><strong>Invite Redemption</strong><span>Open guest redemption page ↗</span></a>
+        <a class="admin-operation-card" href="/admin-launch.html"><strong>Launch Readiness</strong><span>Payments, email, backups & secrets →</span></a>
         <a class="admin-operation-card" href="/" target="_blank" rel="noopener noreferrer"><strong>Public Site</strong><span>View NOCTURNE homepage ↗</span></a>
       </nav>
+
+      <section class="admin-reminder-test" aria-labelledby="reminder-test-title">
+        <div>
+          <p class="admin-kicker">Controlled email test</p>
+          <h2 id="reminder-test-title">Send one purchase reminder.</h2>
+          <p>Bulk reminders remain paused during test mode. Enter the exact email of one approved applicant who redeemed their invitation but has not purchased a ticket.</p>
+        </div>
+        <form id="admin-reminder-test-form" class="admin-reminder-test-form">
+          <label for="admin-reminder-test-email"><span>Applicant email</span><input id="admin-reminder-test-email" type="email" autocomplete="off" placeholder="guest@example.com" required></label>
+          <button id="admin-reminder-test-submit" class="admin-outline-button" type="submit">Send one test reminder</button>
+          <p id="admin-reminder-test-status" class="admin-status" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section class="admin-ticket-overview admin-drink-overview" aria-labelledby="drink-ops-title">
+        <div class="admin-ticket-overview-head"><div><p class="admin-kicker">Drink package operations</p><h2 id="drink-ops-title">Packages &amp; redemptions.</h2></div><div class="admin-ticket-revenue"><small>Package revenue</small><strong id="drink-package-revenue">$0.00</strong><span id="drink-upgrade-revenue"></span></div></div>
+        <div class="admin-drink-stats" aria-label="Drink package summary">
+          <article><span id="drink-stat-purchased">0</span><small>Packages sold</small></article><article><span id="drink-stat-pending">0</span><small>Awaiting band</small></article><article><span id="drink-stat-active">0</span><small>Active bands</small></article><article><span id="drink-stat-exhausted">0</span><small>Exhausted</small></article><article><span id="drink-stat-redeemed">0</span><small>Credits redeemed</small></article><article><span id="drink-stat-remaining">0</span><small>Credits remaining</small></article>
+        </div>
+        <p id="drink-mix" class="admin-muted">Beer 0 · Well 0 · Premium 0 · Non-alcoholic 0</p>
+      </section>
 
       <section class="admin-ticket-overview" aria-labelledby="ticket-ops-title">
         <div class="admin-ticket-overview-head">
@@ -97,8 +131,10 @@
         <label class="admin-search"><span>Search</span><input id="admin-search" type="search" placeholder="Name, email, ticket ID, Stripe ID…" autocomplete="off"></label>
         <label><span>Application status</span><select id="admin-status-filter"><option value="all">All applications</option><option value="pending">Pending</option><option value="shortlist">Shortlist</option><option value="approved">Approved</option><option value="declined">Declined</option></select></label>
         <label><span>Invite status</span><select id="admin-invite-filter"><option value="all">All invite states</option><option value="none">No invite</option><option value="active">Active</option><option value="redeemed">Redeemed</option><option value="revoked">Revoked</option><option value="expired">Expired</option></select></label>
-        <label><span>Ticket status</span><select id="admin-ticket-filter"><option value="all">All ticket states</option><option value="none">No ticket</option><option value="checkout_created">Checkout opened</option><option value="paid">Paid / comp</option><option value="checked_in">Checked in</option><option value="refunded">Refunded</option></select></label>
+        <label><span>Ticket status</span><select id="admin-ticket-filter"><option value="all">All ticket states</option><option value="unpaid">Unpaid (all)</option><option value="none">No ticket</option><option value="checkout_created">Checkout opened</option><option value="checkout_expired">Checkout expired</option><option value="paid">Paid / comp</option><option value="checked_in">Checked in</option><option value="refunded">Refunded</option><option value="disputed">Disputed</option></select></label>
       </div>
+
+      <div class="admin-filter-count" aria-live="polite"><strong id="admin-visible-count">0</strong><span>applicants match the active filters</span></div>
 
       <p id="admin-load-status" class="admin-status" role="status" aria-live="polite"></p>
 
@@ -107,11 +143,23 @@
           <div class="admin-list-head"><span>Applicant</span><span>Ticket</span><span>Status</span></div>
           <div id="admin-application-list" class="admin-application-list"></div>
           <div id="admin-empty" class="admin-empty" hidden>No applications match this view.</div>
+          <div class="admin-pagination" aria-label="Application pages">
+            <button id="admin-page-previous" class="admin-outline-button" type="button">Previous</button>
+            <span id="admin-page-status">Page 1 of 1</span>
+            <button id="admin-page-next" class="admin-outline-button" type="button">Next</button>
+          </div>
         </section>
         <aside id="admin-detail" class="admin-detail" aria-label="Selected application"><div class="admin-detail-placeholder"><img src="/assets/images/favicon.png" alt="" width="92" height="92"><p>Select an application to review.</p></div></aside>
       </div>
     </section>
   </main>
+
+  <footer class="admin-footer">
+    <a class="admin-footer-brand" href="/" aria-label="NOCTURNE Festival home">
+      <img src="/assets/images/nocturne-logo-wordmark.png" alt="NOCTURNE Festival" width="2048" height="745" loading="lazy">
+    </a>
+    <p>Wild Ones &amp; Bass Babes Present · Private Operations Desk</p>
+  </footer>
 
   <div id="invite-modal" class="invite-modal" hidden role="dialog" aria-modal="true" aria-labelledby="invite-modal-title">
     <div class="invite-modal-card invite-modal-wide">

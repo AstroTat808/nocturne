@@ -1,0 +1,48 @@
+name: Materialize exact NOCTURNE logo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/materialize-exact-logo.yml'
+      - '.github/logo-v3/nocturne-exact-*.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rebuild supplied logo artwork
+        shell: bash
+        run: |
+          mkdir -p site/assets/images
+          cat \
+            .github/logo-v3/nocturne-exact-01.b64 \
+            .github/logo-v3/nocturne-exact-02a.b64 \
+            .github/logo-v3/nocturne-exact-02b.b64 \
+            .github/logo-v3/nocturne-exact-03.b64 \
+            .github/logo-v3/nocturne-exact-04.b64 \
+            | tr -d '\n\r ' \
+            | base64 --decode > site/assets/images/nocturne-logo-exact.webp
+          test "$(wc -c < site/assets/images/nocturne-logo-exact.webp | tr -d ' ')" = "28928"
+          test "$(sha256sum site/assets/images/nocturne-logo-exact.webp | awk '{print $1}')" = "4aa4ae64b9383127c857a9ddd76aa47292f78e0556ad79acf406873ff07a86bc"
+
+      - name: Commit exact logo asset
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/assets/images/nocturne-logo-exact.webp
+          if git diff --cached --quiet; then
+            echo "Exact NOCTURNE logo asset is already current."
+            exit 0
+          fi
+          git commit -m "Add exact supplied NOCTURNE logo asset"
+          git push

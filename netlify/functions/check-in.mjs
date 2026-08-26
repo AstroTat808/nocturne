@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { verifyTicketToken } from './_ticket-token.mjs';
+import { writeAudit } from './_audit.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -143,6 +144,8 @@ async function checkIn(req, input) {
   } catch (error) {
     console.error('NOCTURNE secondary check-in sync failed:', error);
   }
+
+  await writeAudit('ticket.checked_in', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, guestName });
 
   return json({ ok: true, result: 'valid', message: 'VALID — CHECKED IN', ticketId: parsed.ticketId, guestName, checkedInAt });
 }
