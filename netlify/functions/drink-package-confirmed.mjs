@@ -10,7 +10,7 @@ function page({ confirmed = false, pending = false, cancelled = false, message =
   const kicker = confirmed ? 'Package Confirmed' : pending ? 'Finalizing Purchase' : cancelled ? 'Checkout Canceled' : 'Package Status';
   const heading = confirmed ? 'Your six credits are ready.' : pending ? 'Payment received.' : cancelled ? 'No charge was made.' : 'We could not confirm that package.';
   const status = confirmed
-    ? `<div class="private-access-status"><strong>Six-Drink Package Added</strong>${amount ? `<br>${escapeHtml(amount)}` : ''}</div>`
+    ? `<div class="private-access-status"><strong>Six-Drink Package Added</strong>${amount ? `<br>${escapeHtml(amount)}` : ''}</div><div class="private-access-status"><strong>FINAL SALE / NON-REFUNDABLE</strong><br>This package cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</div>`
     : pending
       ? '<div class="private-access-status"><strong>Finalizing your package…</strong><br>This page will refresh automatically.</div>'
       : cancelled
