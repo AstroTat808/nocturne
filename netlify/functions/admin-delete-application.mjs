@@ -1,12 +1,14 @@
 import { getStore } from '@netlify/blobs';
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { writeAudit } from './_audit.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
 const INVITE_STORE = 'nocturne-invites';
 const ORDER_STORE = 'nocturne-ticket-orders';
+const REDEMPTION_STORE = 'nocturne-drink-redemptions';
 const SESSION_COOKIE = 'nocturne_admin';
+const FORCE_PHRASE = 'REVOKE AND DELETE';
 
 function json(data, status = 200) {
   return Response.json(data, {
@@ -98,6 +100,8 @@ function hasTicketActivity(review, summary) {
     || review?.drinkPackageCheckoutSessionId
     || review?.drinkPackagePaymentIntentId
     || review?.drinkPackageRefundId
+    || review?.waterPackageCheckoutSessionId
+    || review?.waterPackagePaymentIntentId
     || summary?.ticketId
     || summary?.stripeCheckoutSessionId
     || summary?.stripePaymentIntentId
@@ -105,6 +109,8 @@ function hasTicketActivity(review, summary) {
     || summary?.drinkPackageCheckoutSessionId
     || summary?.drinkPackagePaymentIntentId
     || summary?.drinkPackageRefundId
+    || summary?.waterPackageCheckoutSessionId
+    || summary?.waterPackagePaymentIntentId
     || summary?.checkedInAt
     || summary?.paidAt
     || summary?.refundedAt
@@ -123,12 +129,16 @@ function hasStripeActivity(review, summary) {
     || review?.drinkPackageCheckoutSessionId
     || review?.drinkPackagePaymentIntentId
     || review?.drinkPackageRefundId
+    || review?.waterPackageCheckoutSessionId
+    || review?.waterPackagePaymentIntentId
     || summary?.stripeCheckoutSessionId
     || summary?.stripePaymentIntentId
     || summary?.stripeRefundId
     || summary?.drinkPackageCheckoutSessionId
     || summary?.drinkPackagePaymentIntentId
     || summary?.drinkPackageRefundId
+    || summary?.waterPackageCheckoutSessionId
+    || summary?.waterPackagePaymentIntentId
   );
 }
 
@@ -150,6 +160,120 @@ function isActiveDeletableComp(review, summary) {
   return state === 'paid' || status === 'paid';
 }
 
+function emailHash(value) {
+  return createHash('sha256').update(String(value || '').trim().toLowerCase()).digest('hex');
+}
+
+function financialTombstone(record, submissionId, revokedAt) {
+  if (!record) return null;
+  const drinkPurchased = Boolean(record.drinkPackagePurchased || record.drinkPackageRequested);
+  const waterPurchased = Boolean(record.waterPackagePurchased || record.waterPackageRequested);
+  return {
+    submissionId,
+    status: 'revoked',
+    revocationReason: 'admin_force_delete',
+    revokedAt,
+    updatedAt: revokedAt,
+    deletedApplicant: true,
+    ticketId: record.ticketId || null,
+    ticketSource: record.ticketSource || null,
+    amountTotal: Number.isFinite(Number(record.amountTotal)) ? Number(record.amountTotal) : null,
+    ticketAmount: Number.isFinite(Number(record.ticketAmount)) ? Number(record.ticketAmount) : null,
+    currency: record.currency || process.env.NOCTURNE_TICKET_CURRENCY || 'usd',
+    stripeCheckoutSessionId: record.stripeCheckoutSessionId || null,
+    stripePaymentIntentId: record.stripePaymentIntentId || null,
+    stripeRefundId: record.stripeRefundId || null,
+    refundStatus: record.refundStatus || null,
+    paidAt: record.paidAt || null,
+    refundedAt: record.refundedAt || null,
+    disputedAt: record.disputedAt || null,
+    disputeStatus: record.disputeStatus || null,
+    checkedInAt: record.checkedInAt || null,
+    drinkPackagePurchased: drinkPurchased,
+    drinkPackageStatus: drinkPurchased ? 'revoked' : 'none',
+    drinkPackagePriceCents: Number(record.drinkPackagePriceCents || 0),
+    drinkCreditsPurchased: Number(record.drinkCreditsPurchased || 0),
+    drinkCreditsRedeemed: Number(record.drinkCreditsRedeemed || 0),
+    drinkCreditsRemaining: 0,
+    drinkPackageCheckoutSessionId: record.drinkPackageCheckoutSessionId || null,
+    drinkPackagePaymentIntentId: record.drinkPackagePaymentIntentId || null,
+    drinkPackageRefundId: record.drinkPackageRefundId || null,
+    drinkPackagePaidAt: record.drinkPackagePaidAt || null,
+    drinkPackageInvalidatedAt: drinkPurchased ? revokedAt : null,
+    drinkPackageInvalidationReason: drinkPurchased ? 'admin_force_delete' : null,
+    waterPackagePurchased: waterPurchased,
+    waterPackageStatus: waterPurchased ? 'revoked' : 'none',
+    waterPackagePriceCents: Number(record.waterPackagePriceCents || 0),
+    waterPackageCheckoutSessionId: record.waterPackageCheckoutSessionId || null,
+    waterPackagePaymentIntentId: record.waterPackagePaymentIntentId || null,
+    waterPackagePaidAt: record.waterPackagePaidAt || null,
+    waterPackageInvalidatedAt: waterPurchased ? revokedAt : null,
+    waterPackageInvalidationReason: waterPurchased ? 'admin_force_delete' : null
+  };
+}
+
+async function revokeOrderRecord(orderStore, key, submissionId, revokedAt) {
+  if (!key) return false;
+  const record = await safeGet(orderStore, key);
+  if (!record) return false;
+  await orderStore.setJSON(key, financialTombstone(record, submissionId, revokedAt));
+  return true;
+}
+
+async function forceRevokeAndDelete({ applicationStore, reviewStore, inviteStore, orderStore, redemptionStore, submissionId, application, review, summary }) {
+  const revokedAt = new Date().toISOString();
+  const sessionKeys = new Set([
+    summary?.stripeCheckoutSessionId,
+    summary?.drinkPackageCheckoutSessionId,
+    summary?.waterPackageCheckoutSessionId,
+    review?.stripeCheckoutSessionId,
+    review?.drinkPackageCheckoutSessionId,
+    review?.waterPackageCheckoutSessionId
+  ].filter(Boolean).map(String));
+
+  for (const key of sessionKeys) {
+    await revokeOrderRecord(orderStore, key, submissionId, revokedAt);
+  }
+
+  if (summary) {
+    await orderStore.setJSON(`submission-${submissionId}`, financialTombstone(summary, submissionId, revokedAt));
+  } else if (hasTicketActivity(review, summary)) {
+    await orderStore.setJSON(`submission-${submissionId}`, financialTombstone(review, submissionId, revokedAt));
+  }
+
+  if (summary?.drinkPackageWristbandHash) {
+    await redemptionStore.delete(`wristband-${summary.drinkPackageWristbandHash}`).catch(() => {});
+  }
+
+  await orderStore.delete(`checkout-attempt-${submissionId}`).catch(() => {});
+  if (review?.inviteHash) await inviteStore.delete(String(review.inviteHash)).catch(() => {});
+  await reviewStore.delete(submissionId);
+  await applicationStore.delete(submissionId);
+
+  await writeAudit('application.force_deleted', {
+    submissionId,
+    applicantEmailHash: emailHash(application?.email),
+    ticketId: summary?.ticketId || review?.ticketId || null,
+    ticketWasCheckedIn: isCheckedIn(review, summary),
+    financialRecordRetained: Boolean(summary || hasTicketActivity(review, summary)),
+    inviteRevoked: Boolean(review?.inviteHash),
+    drinkPackageRevoked: Boolean(summary?.drinkPackagePurchased || review?.drinkPackagePurchased),
+    waterPackageRevoked: Boolean(summary?.waterPackagePurchased || review?.waterPackagePurchased),
+    revokedAt
+  });
+
+  return {
+    ok: true,
+    forced: true,
+    deletedId: submissionId,
+    deletedEmail: String(application?.email || '').trim().toLowerCase(),
+    ticketRevoked: Boolean(summary?.ticketId || review?.ticketId || hasTicketActivity(review, summary)),
+    ticketWasCheckedIn: isCheckedIn(review, summary),
+    inviteRevoked: Boolean(review?.inviteHash),
+    financialRecordRetained: Boolean(summary || hasTicketActivity(review, summary))
+  };
+}
+
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
   if (!authenticated(req)) return json({ error: 'Unauthorized.' }, 401);
@@ -160,14 +284,20 @@ export default async (req) => {
 
   const submissionId = String(body?.submissionId || '').trim();
   const confirmEmail = String(body?.confirmEmail || '').trim().toLowerCase();
+  const force = body?.force === true;
+  const confirmAction = String(body?.confirmAction || '').trim().toUpperCase();
   if (!submissionId || submissionId.length > 180 || submissionId.includes('..')) {
     return json({ error: 'Invalid applicant ID.' }, 400);
+  }
+  if (force && confirmAction !== FORCE_PHRASE) {
+    return json({ error: `Force deletion requires the confirmation phrase ${FORCE_PHRASE}.` }, 400);
   }
 
   const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
   const inviteStore = getStore({ name: INVITE_STORE, consistency: 'strong' });
   const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
+  const redemptionStore = getStore({ name: REDEMPTION_STORE, consistency: 'strong' });
 
   try {
     const [application, review, summaryEntry] = await Promise.all([
@@ -183,22 +313,27 @@ export default async (req) => {
       return json({ error: 'Email confirmation did not match this applicant.' }, 400);
     }
 
+    if (force) {
+      const result = await forceRevokeAndDelete({ applicationStore, reviewStore, inviteStore, orderStore, redemptionStore, submissionId, application, review, summary });
+      return json(result);
+    }
+
     const compTicket = isActiveDeletableComp(review, summary);
     if (ticketSource(review, summary) === 'comp' && isCheckedIn(review, summary)) {
       return json({
-        error: 'This complimentary ticket has already been checked in and cannot be deleted without an explicit admission-record policy.'
+        error: 'This complimentary ticket has already been checked in. Use Force Revoke & Delete if you intentionally want to invalidate it and remove the applicant.'
       }, 409);
     }
 
     if (hasTicketActivity(review, summary) && !compTicket) {
       return json({
-        error: 'This applicant has ticket or payment activity and cannot be deleted from the dashboard. Financial and admission records are retained for safety and accounting.'
+        error: 'This applicant has ticket or payment activity. Use Force Revoke & Delete only when you intentionally want to invalidate the ticket while retaining a minimal accounting record.'
       }, 409);
     }
 
     // Revoke with an ETag guard before deletion. This makes revocation compete
     // atomically with check-in: whichever writes first wins, and an admission
-    // that won the race remains protected from deletion.
+    // that won the race remains protected from ordinary deletion.
     if (compTicket) {
       if (summary) {
         const revokedAt = new Date().toISOString();
@@ -232,7 +367,7 @@ export default async (req) => {
 
     await writeAudit('application.deleted', {
       submissionId,
-      applicantEmail: email,
+      applicantEmailHash: emailHash(email),
       inviteRevoked: Boolean(review?.inviteHash),
       compTicketRevoked: compTicket
     });
