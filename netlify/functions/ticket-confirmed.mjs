@@ -1,6 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { makeTicketToken } from './_ticket-token.mjs';
-import { readTicketAccess } from './_ticket-auth.mjs';
+import { accessTtlSeconds, makeAccessCookie, makeAccessToken, readTicketAccess, verifyReentryToken } from './_ticket-auth.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 
@@ -36,16 +36,40 @@ function page({ paid = false, pending = false, ticketId = '', amount = '', digit
 <body class="private-access-page"><main class="private-access-shell"><section class="private-access-card" aria-labelledby="ticket-title"><div class="private-access-logo-wrap"><img class="private-access-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768"></div><p class="section-kicker">${escapeHtml(kicker)}</p><h1 id="ticket-title">${escapeHtml(heading)}</h1><p>${detail}</p>${status}${packageNotice}${waterNotice}<p>${paid ? 'Your digital ticket contains the unique QR code you will present at event check-in.' : 'Do not submit another payment unless this page continues to show an error after Stripe has finished processing.'}</p><div class="private-access-actions">${ticketAction}<a class="btn secondary" href="/">Return to NOCTURNE</a></div></section></main></body></html>`;
 }
 
+function htmlResponse(html, status = 200, extraHeaders = {}) {
+  return new Response(html, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Robots-Tag': 'noindex, nofollow,noarchive',
+      'Referrer-Policy': 'no-referrer',
+      ...extraHeaders
+    }
+  });
+}
+
 export default async (req) => {
   if (req.method !== 'GET') return new Response('Method not allowed.', { status: 405 });
   const url = new URL(req.url);
-  const access = readTicketAccess(req);
-  if (!access) return new Response(page({ message: 'Private ticket access has expired. Use the secure link from your NOCTURNE email to return.' }), { status: 401, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow,noarchive', 'Referrer-Policy': 'no-referrer' } });
   const sessionId = String(url.searchParams.get('session_id') || '').trim();
-  if (!/^cs_(test_|live_)?[A-Za-z0-9_]{10,}$/.test(sessionId)) return new Response(page({ message: 'The checkout session ID is missing or invalid.' }), { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
+  if (!/^cs_(test_|live_)?[A-Za-z0-9_]{10,}$/.test(sessionId)) return htmlResponse(page({ message: 'The checkout session ID is missing or invalid.' }), 400);
+
   const store = getStore({ name: ORDER_STORE, consistency: 'strong' });
   const order = await store.get(sessionId, { type: 'json', consistency: 'strong' });
-  if (order && order.submissionId !== access.submissionId) return new Response(page({ message: 'This confirmation does not belong to the current private access session.' }), { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow,noarchive', 'Referrer-Policy': 'no-referrer' } });
+  const cookieAccess = readTicketAccess(req);
+  const returnAccess = verifyReentryToken(String(url.searchParams.get('return_token') || '').trim());
+  const access = cookieAccess || returnAccess;
+
+  if (!access) return htmlResponse(page({ message: 'Private ticket access has expired. Use the secure link from your NOCTURNE email to return.' }), 401);
+  if (order && order.submissionId !== access.submissionId) return htmlResponse(page({ message: 'This confirmation does not belong to the current private access session.' }), 403);
+
+  let extraHeaders = {};
+  if (!cookieAccess && returnAccess) {
+    const ttlSeconds = accessTtlSeconds();
+    const token = makeAccessToken(returnAccess.submissionId, ttlSeconds);
+    if (token) extraHeaders = { 'Set-Cookie': makeAccessCookie(token, ttlSeconds) };
+  }
 
   let html;
   let status = 200;
@@ -65,5 +89,5 @@ export default async (req) => {
     });
   } else { html = page({ pending: true }); status = 202; }
 
-  return new Response(html, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow, noarchive' } });
+  return htmlResponse(html, status, extraHeaders);
 };
