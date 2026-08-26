@@ -7,6 +7,15 @@ const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
 const ORDER_STORE = 'nocturne-ticket-orders';
 const SESSION_COOKIE = 'nocturne_admin';
+const REFUND_REASONS = new Map([
+  ['guest_request', 'Guest request'],
+  ['duplicate_purchase', 'Duplicate purchase'],
+  ['event_cancellation', 'Event cancellation'],
+  ['event_change', 'Material event change'],
+  ['payment_error', 'Payment / checkout error'],
+  ['goodwill', 'Administrative goodwill'],
+  ['other', 'Other']
+]);
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' } });
@@ -63,6 +72,10 @@ function validSubmissionId(value) {
   return /^[A-Za-z0-9_-]{6,128}$/.test(String(value || ''));
 }
 
+function cleanNotes(value) {
+  return String(value || '').trim().replace(/\r\n/g, '\n').slice(0, 1000);
+}
+
 function escapeHtml(value = '') {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
@@ -78,7 +91,8 @@ function refundableAdmissionCents(summary) {
   return Number.isInteger(amount) && amount > 0 ? amount : 0;
 }
 
-async function stripeRefund(paymentIntentId, amount, submissionId) {
+async function stripeRefund(paymentIntentId, amount, submissionId, refundReason, refundNotes) {
+  const stripeReason = refundReason === 'duplicate_purchase' ? 'duplicate' : 'requested_by_customer';
   const response = await fetch('https://api.stripe.com/v1/refunds', {
     method: 'POST',
     headers: {
@@ -89,10 +103,13 @@ async function stripeRefund(paymentIntentId, amount, submissionId) {
     body: new URLSearchParams({
       payment_intent: paymentIntentId,
       amount: String(amount),
-      reason: 'requested_by_customer',
+      reason: stripeReason,
       'metadata[submissionId]': submissionId,
       'metadata[event]': 'NOCTURNE',
       'metadata[refundRole]': 'admission-only',
+      'metadata[refundReason]': refundReason,
+      'metadata[refundReasonLabel]': REFUND_REASONS.get(refundReason) || refundReason,
+      'metadata[refundNotes]': refundNotes.slice(0, 450),
       'metadata[drinkPackageRefunded]': 'false',
       'metadata[source]': 'admin_dashboard'
     })
@@ -136,8 +153,12 @@ export default async (req) => {
   const submissionId = String(body?.submissionId || '').trim();
   const confirmTicketId = String(body?.confirmTicketId || '').trim();
   const initiatedBy = cleanOperator(body?.initiatedBy);
+  const refundReason = String(body?.refundReason || '').trim();
+  const refundNotes = cleanNotes(body?.refundNotes);
   if (!validSubmissionId(submissionId)) return json({ error: 'Invalid submission ID.' }, 400);
   if (!/^[A-Za-z0-9 .,'’_-]{2,80}$/.test(initiatedBy)) return json({ error: 'Enter a valid admin name or initials.' }, 400);
+  if (!REFUND_REASONS.has(refundReason)) return json({ error: 'Choose a refund reason.' }, 400);
+  if (refundReason === 'other' && refundNotes.length < 3) return json({ error: 'Enter refund notes when the reason is Other.' }, 400);
 
   const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
@@ -164,15 +185,31 @@ export default async (req) => {
 
   let refund;
   try {
-    refund = await stripeRefund(summary.stripePaymentIntentId, amount, submissionId);
+    refund = await stripeRefund(summary.stripePaymentIntentId, amount, submissionId, refundReason, refundNotes);
   } catch (error) {
-    await writeAudit('refund.admission_failed', { submissionId, ticketId: summary.ticketId, initiatedBy, amount, error: String(error?.message || error) }).catch(() => {});
+    await writeAudit('refund.admission_failed', { submissionId, ticketId: summary.ticketId, initiatedBy, amount, refundReason, refundNotes, error: String(error?.message || error) }).catch(() => {});
     return json({ error: error.message || 'Admission refund failed.' }, 502);
   }
 
   const now = new Date().toISOString();
   const history = Array.isArray(summary.refundHistory) ? summary.refundHistory.filter(Boolean) : [];
-  history.push({ id: `refund-${refund.id}`, type: 'admission', label: 'Admission refund', amountCents: amount, currency: refund.currency || summary.currency || 'usd', stripeRefundId: refund.id, paymentIntentId: summary.stripePaymentIntentId, date: now, status: refund.status || 'submitted', initiatedBy, source: 'admin_dashboard', action: 'admission-only' });
+  history.push({
+    id: `refund-${refund.id}`,
+    type: 'admission',
+    label: 'Admission refund',
+    amountCents: amount,
+    currency: refund.currency || summary.currency || 'usd',
+    stripeRefundId: refund.id,
+    paymentIntentId: summary.stripePaymentIntentId,
+    date: now,
+    status: refund.status || 'submitted',
+    initiatedBy,
+    source: 'admin_dashboard',
+    action: 'admission-only',
+    reason: refundReason,
+    reasonLabel: REFUND_REASONS.get(refundReason),
+    notes: refundNotes
+  });
   const packagePatch = packageAttached ? {
     ...(summary.drinkPackagePurchased ? {
       drinkPackageStatus: 'forfeited',
@@ -187,18 +224,18 @@ export default async (req) => {
       waterPackageInvalidationReason: 'admission_refunded_nonrefundable'
     } : {})
   } : {};
-  const next = { ...summary, ...packagePatch, status: 'refunded', stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundedAt: now, refundedAmount: amount, refundInitiatedBy: initiatedBy, refundHistory: history, updatedAt: now };
+  const next = { ...summary, ...packagePatch, status: 'refunded', stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundedAt: now, refundedAmount: amount, refundInitiatedBy: initiatedBy, refundReason, refundReasonLabel: REFUND_REASONS.get(refundReason), refundNotes, refundHistory: history, updatedAt: now };
 
   const write = await orderStore.setJSON(summaryKey, next, { onlyIfMatch: summaryEntry.etag });
   if (!write.modified) return json({ error: 'Ticket status changed while the refund was being recorded. Verify Stripe before retrying.' }, 409);
   if (summary.stripeCheckoutSessionId) {
     const order = await orderStore.get(summary.stripeCheckoutSessionId, { type: 'json', consistency: 'strong' });
-    if (order) await orderStore.setJSON(summary.stripeCheckoutSessionId, { ...order, ...packagePatch, status: 'refunded', stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundedAt: now, refundedAmount: amount, refundHistory: history, updatedAt: now });
+    if (order) await orderStore.setJSON(summary.stripeCheckoutSessionId, { ...order, ...packagePatch, status: 'refunded', stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundedAt: now, refundedAmount: amount, refundInitiatedBy: initiatedBy, refundReason, refundReasonLabel: REFUND_REASONS.get(refundReason), refundNotes, refundHistory: history, updatedAt: now });
   }
-  if (review) await reviewStore.setJSON(submissionId, { ...review, ...packagePatch, ticketState: 'refunded', ticketRefundedAt: now, stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundInitiatedBy: initiatedBy, refundHistory: history, updatedAt: now });
+  if (review) await reviewStore.setJSON(submissionId, { ...review, ...packagePatch, ticketState: 'refunded', ticketRefundedAt: now, stripeRefundId: refund.id, refundStatus: refund.status || 'submitted', refundInitiatedBy: initiatedBy, refundReason, refundReasonLabel: REFUND_REASONS.get(refundReason), refundNotes, refundHistory: history, updatedAt: now });
 
   const email = await sendEmail(application, next, refund, amount, packageAttached).catch((error) => ({ status: 'failed', error: String(error?.message || error) }));
-  await writeAudit('ticket.admin_admission_partial_refunded', { submissionId, ticketId: summary.ticketId, stripePaymentIntentId: summary.stripePaymentIntentId, stripeRefundId: refund.id, amount, packageBundled, packageAttached, packageRefunded: false, packageForfeited: packageAttached, initiatedBy, emailStatus: email.status });
+  await writeAudit('ticket.admin_admission_partial_refunded', { submissionId, ticketId: summary.ticketId, stripePaymentIntentId: summary.stripePaymentIntentId, stripeRefundId: refund.id, amount, packageBundled, packageAttached, packageRefunded: false, packageForfeited: packageAttached, initiatedBy, refundReason, refundReasonLabel: REFUND_REASONS.get(refundReason), refundNotes, emailStatus: email.status });
 
-  return json({ ok: true, action: 'admission-only', ticketId: summary.ticketId, admissionRefund: { id: refund.id, status: refund.status || 'submitted', amount, currency: refund.currency || summary.currency || 'usd' }, drinkPackageRefunded: false, drinkPackageForfeited: Boolean(summary.drinkPackagePurchased), waterPackageRefunded: false, waterPackageForfeited: Boolean(summary.waterPackagePurchased), refundEmailStatus: email.status });
+  return json({ ok: true, action: 'admission-only', ticketId: summary.ticketId, admissionRefund: { id: refund.id, status: refund.status || 'submitted', amount, currency: refund.currency || summary.currency || 'usd' }, refundReason, refundReasonLabel: REFUND_REASONS.get(refundReason), refundNotes, drinkPackageRefunded: false, drinkPackageForfeited: Boolean(summary.drinkPackagePurchased), waterPackageRefunded: false, waterPackageForfeited: Boolean(summary.waterPackagePurchased), refundEmailStatus: email.status });
 };
