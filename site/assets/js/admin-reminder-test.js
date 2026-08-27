@@ -81,8 +81,11 @@
           `${Number(total.duplicate || 0)} already sent today`,
           `${Number(total.failed || 0)} failed`
         ];
-        runStatus.textContent = parts.join(' · ');
-        if (Number(total.failed || 0) > 0) runStatus.classList.add('error');
+        const unavailable = [];
+        if (invite.enabled === false || invite.reason) unavailable.push(`Invite stream: ${invite.reason || 'disabled'}`);
+        if (purchase.enabled === false || purchase.reason) unavailable.push(`Purchase stream: ${purchase.reason || 'disabled'}`);
+        runStatus.textContent = `${parts.join(' · ')}${unavailable.length ? ` · ${unavailable.join(' · ')}` : ''}`;
+        if (Number(total.failed || 0) > 0 || unavailable.length) runStatus.classList.add('error');
       } catch (error) {
         runStatus.textContent = error.message || 'The reminder run could not be completed.';
         runStatus.classList.add('error');
