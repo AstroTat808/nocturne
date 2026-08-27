@@ -95,6 +95,55 @@
     });
   }
 
+  function injectBulkDrinkOfferButton() {
+    if (document.querySelector('#admin-send-bulk-drink-offer')) return;
+    const overview = document.querySelector('.admin-drink-overview');
+    if (!overview) return;
+
+    const panel = document.createElement('div');
+    panel.className = 'admin-drink-bulk-offer';
+    panel.innerHTML = `
+      <div>
+        <strong>Ticket-holder drink package campaign</strong>
+        <p class="admin-muted">Email every current paid or checked-in ticket holder who does not already have the Six-Drink Package. Guests already emailed by this bulk campaign today are skipped automatically.</p>
+      </div>
+      <div>
+        <button id="admin-send-bulk-drink-offer" class="admin-outline-button" type="button">Email Drink Package Offer →</button>
+        <p id="admin-send-bulk-drink-offer-status" class="admin-status" role="status" aria-live="polite"></p>
+      </div>`;
+    overview.append(panel);
+
+    const button = panel.querySelector('#admin-send-bulk-drink-offer');
+    const result = panel.querySelector('#admin-send-bulk-drink-offer-status');
+    button.addEventListener('click', async () => {
+      if (!window.confirm('Email the Six-Drink Package offer now to ALL eligible NOCTURNE ticket holders who do not already have the package? Guests already sent this bulk offer today will be skipped.')) return;
+      button.disabled = true;
+      result.classList.remove('error');
+      result.textContent = 'Finding eligible ticket holders and sending offers…';
+      try {
+        const response = await fetch('/api/admin/bulk-drink-package-offer', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'send-bulk-drink-package-offer' })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'The drink-package campaign could not be completed.');
+        result.textContent = `Sent ${Number(data.sent || 0)} offer${Number(data.sent || 0) === 1 ? '' : 's'} · ${Number(data.duplicate || 0)} already sent today · ${Number(data.ineligible || 0)} not eligible · ${Number(data.failed || 0)} failed`;
+        if (Number(data.failed || 0) > 0) result.classList.add('error');
+      } catch (error) {
+        result.textContent = error.message || 'The drink-package campaign could not be completed.';
+        result.classList.add('error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
   injectManualRunPanel();
-  new MutationObserver(injectManualRunPanel).observe(document.documentElement, { childList: true, subtree: true });
+  injectBulkDrinkOfferButton();
+  new MutationObserver(() => {
+    injectManualRunPanel();
+    injectBulkDrinkOfferButton();
+  }).observe(document.documentElement, { childList: true, subtree: true });
 })();
