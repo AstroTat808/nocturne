@@ -15,7 +15,7 @@ function remindersEnabled() {
   return String(enabled).toLowerCase() === 'true' && String(mode).toLowerCase() === 'live';
 }
 
-function eligibleForInviteReminder(review, invite, now = Date.now()) {
+export function eligibleForInviteReminder(review, invite, now = Date.now()) {
   if (!review || review.status !== 'approved' || review.inviteState !== 'active' || !review.inviteHash) return false;
   if (!review.inviteEmailSentAt) return false;
   if (review.inviteRedeemedAt || review.inviteRevokedAt) return false;
@@ -90,12 +90,16 @@ async function processCandidate(submissionId, dateKey, stores) {
   }
 }
 
-export default async () => {
-  if (!remindersEnabled()) return;
-  if (!beforeEvent()) return;
+export async function runInviteReminders({ trigger = 'schedule', scanAll = false } = {}) {
+  if (!remindersEnabled()) {
+    return { enabled: false, reason: 'Invitation reminders are not enabled in live mode.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, failed: 0 };
+  }
+  if (!beforeEvent()) {
+    return { enabled: true, reason: 'The event start cutoff has passed.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, failed: 0 };
+  }
   if (!process.env.RESEND_API_KEY || !process.env.NOCTURNE_EMAIL_FROM) {
     console.error('NOCTURNE daily invite reminders are enabled but email is not configured.');
-    return;
+    return { enabled: true, reason: 'Email is not configured.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, failed: 0 };
   }
 
   const stores = {
@@ -107,8 +111,8 @@ export default async () => {
 
   const { blobs } = await stores.reviews.list();
   const dateKey = honoluluDate();
-  const limit = Math.max(1, Math.min(Number(process.env.NOCTURNE_INVITE_REMINDER_BATCH_LIMIT || 100), 250));
-  const ids = blobs.map(({ key }) => key).slice(0, limit);
+  const scheduledLimit = Math.max(1, Math.min(Number(process.env.NOCTURNE_INVITE_REMINDER_BATCH_LIMIT || 100), 250));
+  const ids = blobs.map(({ key }) => key).slice(0, scanAll ? blobs.length : scheduledLimit);
   const results = [];
 
   for (let index = 0; index < ids.length; index += 5) {
@@ -119,23 +123,35 @@ export default async () => {
     counts[result.status] = (counts[result.status] || 0) + 1;
     return counts;
   }, {});
-
-  console.log('NOCTURNE daily invite reminder run:', { dateKey, ...summary });
-  await writeAudit('invite_reminder.run', {
+  const output = {
+    enabled: true,
     dateKey,
+    trigger,
+    scanned: ids.length,
     sent: summary.sent || 0,
-    failed: summary.failed || 0,
-    scanned: ids.length
-  });
+    duplicate: summary.duplicate || 0,
+    ineligible: summary.ineligible || 0,
+    failed: summary.failed || 0
+  };
+
+  console.log('NOCTURNE daily invite reminder run:', output);
+  await writeAudit('invite_reminder.run', output);
 
   if (summary.failed) {
     await sendOpsAlert('Invitation reminder failures', [
       `Date: ${dateKey}`,
+      `Trigger: ${trigger}`,
       `Sent: ${summary.sent || 0}`,
       `Failed: ${summary.failed}`,
       'Review the Netlify function log for daily-invite-reminders.'
     ]).catch((error) => console.error('NOCTURNE invite reminder alert failed:', error));
   }
+
+  return output;
+}
+
+export default async () => {
+  await runInviteReminders();
 };
 
 // 19:00 UTC = 9:00 AM Hawai‘i Standard Time year-round.
