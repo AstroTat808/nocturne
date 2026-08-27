@@ -87,7 +87,7 @@ export default async (req) => {
         applicationStore.get(key, { type: 'json', consistency: 'strong' }),
         reviewStore.get(key, { type: 'json', consistency: 'strong' }),
         orderStore.get(`submission-${key}`, { type: 'json', consistency: 'strong' })
-      ]));
+      ]);
       if (!application?.email) return null;
 
       const state = ticketState(summary, review);
