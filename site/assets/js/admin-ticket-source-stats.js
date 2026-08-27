@@ -1,11 +1,32 @@
 (() => {
-  const paidEl = document.querySelector('#ticket-stat-paid');
-  const compEl = document.querySelector('#ticket-stat-comp');
   const dashboard = document.querySelector('#admin-dashboard');
+  const statsGrid = document.querySelector('.admin-ticket-stats');
+  const originalPaidCard = statsGrid?.querySelector('[data-ticket-state-filter="paid"]');
   const list = document.querySelector('#admin-application-list');
   const refreshButton = document.querySelector('#admin-refresh');
 
-  if (!paidEl || !compEl || !dashboard) return;
+  if (!dashboard || !statsGrid || !originalPaidCard) return;
+
+  const paidCard = document.createElement('article');
+  paidCard.className = 'admin-ticket-stat admin-ticket-source-stat';
+  paidCard.innerHTML = '<span id="ticket-stat-paid-source">0</span><small>Paid</small><em>Purchased · ready for entry</em>';
+
+  const compCard = document.createElement('article');
+  compCard.className = 'admin-ticket-stat admin-ticket-source-stat';
+  compCard.innerHTML = '<span id="ticket-stat-comp">0</span><small>Comp</small><em>Complimentary · ready for entry</em>';
+
+  originalPaidCard.replaceWith(paidCard, compCard);
+
+  const paidEl = paidCard.querySelector('#ticket-stat-paid-source');
+  const compEl = compCard.querySelector('#ticket-stat-comp');
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .admin-ticket-source-stat{cursor:default}
+    .admin-ticket-source-stat:hover{border-color:rgba(216,154,43,.14);background:#050403;transform:none}
+    @media(min-width:981px){.admin-ticket-stats{grid-template-columns:repeat(5,minmax(0,1fr))}}
+  `;
+  document.head.append(style);
 
   let loading = false;
   let timer = 0;
