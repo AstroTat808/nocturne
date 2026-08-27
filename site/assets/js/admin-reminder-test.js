@@ -147,3 +147,7 @@
     injectBulkDrinkOfferButton();
   }).observe(document.documentElement, { childList: true, subtree: true });
 })();
+
+import('/assets/js/admin-ticket-source-stats.js?v=20260826a').catch((error) => {
+  console.warn('NOCTURNE paid/comp ticket stat enhancement unavailable:', error);
+});
