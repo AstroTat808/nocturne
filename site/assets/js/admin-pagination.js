@@ -1,13 +1,27 @@
 (() => {
   const list = document.querySelector('#admin-application-list');
-  const showMore = document.querySelector('#admin-show-more');
-  const status = document.querySelector('#admin-show-more-status');
-  const controls = document.querySelector('#admin-show-more-controls');
+  const previous = document.querySelector('#admin-page-previous');
+  const showMore = document.querySelector('#admin-page-next');
+  const status = document.querySelector('#admin-page-status');
+  const controls = showMore?.closest('.admin-pagination');
   const visibleCount = document.querySelector('#admin-visible-count');
-  if (!list || !showMore || !status || !controls || !visibleCount) return;
+  if (!list || !previous || !showMore || !status || !controls || !visibleCount) return;
 
   const batchSize = 20;
   let visibleLimit = batchSize;
+
+  previous.hidden = true;
+  previous.disabled = true;
+  previous.setAttribute('aria-hidden', 'true');
+  showMore.textContent = 'Show More';
+  controls.setAttribute('aria-label', 'Load more applications');
+  controls.style.justifyContent = 'center';
+  controls.style.flexWrap = 'wrap';
+  status.style.order = '1';
+  status.style.flexBasis = '100%';
+  status.style.textAlign = 'center';
+  showMore.style.order = '2';
+  showMore.style.minWidth = '150px';
 
   function rows() {
     return Array.from(list.querySelectorAll('.admin-application-row'));
