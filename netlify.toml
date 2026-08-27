@@ -88,6 +88,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/send-reminders-now"
+  to = "/.netlify/functions/admin-send-reminders-now"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/operations"
   to = "/.netlify/functions/admin-operations"
   status = 200
