@@ -1,0 +1,68 @@
+name: Apply NOCTURNE narrative minimum
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/adjust-why-nocturne-minimum.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set Why NOCTURNE minimum to 30 characters
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('site/index.html'): [
+                  ('minlength="50" maxlength="2000" required', 'minlength="30" maxlength="2000" required'),
+                  ('<small>Minimum 50 characters.</small>', '<small>Minimum 30 characters.</small>'),
+              ],
+              Path('site/assets/js/app.js'): [
+                  ('narrative.value.trim().length < 50', 'narrative.value.trim().length < 30'),
+                  ('at least 50 characters.', 'at least 30 characters.'),
+              ],
+              Path('netlify/functions/apply.mjs'): [
+                  ('whyNocturne.length < 50', 'whyNocturne.length < 30'),
+              ],
+          }
+
+          for path, changes in replacements.items():
+              text = path.read_text()
+              original = text
+              for old, new in changes:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(f'{path}: expected exactly one occurrence of {old!r}, found {count}')
+                  text = text.replace(old, new, 1)
+              path.write_text(text)
+              print(f'updated {path}')
+          PY
+
+      - name: Verify changed validation
+        run: |
+          grep -F 'minlength="30"' site/index.html
+          grep -F 'Minimum 30 characters.' site/index.html
+          grep -F 'narrative.value.trim().length < 30' site/assets/js/app.js
+          grep -F 'at least 30 characters.' site/assets/js/app.js
+          grep -F 'whyNocturne.length < 30' netlify/functions/apply.mjs
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Commit application validation change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add site/index.html site/assets/js/app.js netlify/functions/apply.mjs
+          git commit -m 'Reduce Why NOCTURNE minimum to 30 characters'
+          git push origin main
