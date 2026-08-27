@@ -34,6 +34,10 @@ function escapeHtml(value = '') {
     .replaceAll("'", '&#039;');
 }
 
+function normalizeEmail(value = '') {
+  return clean(value, MAX.email).toLowerCase();
+}
+
 function phoneDigits(value = '') {
   let digits = String(value).replace(/\D/g, '');
   if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
@@ -75,7 +79,7 @@ async function readFields(req) {
 
 function validate(fields) {
   const fullName = clean(fields.full_name, MAX.full_name);
-  const email = clean(fields.email, MAX.email).toLowerCase();
+  const email = normalizeEmail(fields.email);
   const phone = clean(fields.phone, MAX.phone);
   const location = clean(fields.location, MAX.location);
   const referral = clean(fields.referral, MAX.referral);
@@ -144,11 +148,43 @@ function hashKey(value) {
   return createHash('sha256').update(String(value)).digest('hex');
 }
 
+async function findDuplicateApplication(fields) {
+  const email = normalizeEmail(fields.email);
+  const phone = phoneDigits(fields.phone);
+  const store = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
+  const { blobs } = await store.list();
+  if (!Array.isArray(blobs) || !blobs.length) return null;
+
+  const applications = await Promise.all(blobs.map(async ({ key }) => {
+    try {
+      return await store.get(key, { type: 'json', consistency: 'strong' });
+    } catch (error) {
+      console.error(`NOCTURNE duplicate check could not read application ${key}:`, error);
+      throw error;
+    }
+  }));
+
+  for (const application of applications) {
+    if (!application) continue;
+    const emailMatches = email && normalizeEmail(application.email) === email;
+    const phoneMatches = phone && phoneDigits(application.phone) === phone;
+    if (emailMatches || phoneMatches) {
+      return {
+        id: application.id || null,
+        emailMatches,
+        phoneMatches
+      };
+    }
+  }
+
+  return null;
+}
+
 async function enforceRateLimit(req, fields) {
   const store = getStore({ name: RATE_STORE, consistency: 'strong' });
   const now = Date.now();
   const ipHash = hashKey(clientIp(req));
-  const emailHash = hashKey(clean(fields.email, MAX.email).toLowerCase());
+  const emailHash = hashKey(normalizeEmail(fields.email));
   const ipKey = `ip-${ipHash}`;
   const emailKey = `email-${emailHash}`;
 
@@ -316,6 +352,29 @@ export default async (req) => {
       : new Response(null, { status: 303, headers: { Location: '/application-received.html' } });
   }
 
+  // One application per person. Match either normalized email address or
+  // normalized 10-digit mobile number against every application currently on file.
+  // The response intentionally does not disclose which contact field matched.
+  try {
+    const duplicate = await findDuplicateApplication(fields);
+    if (duplicate) {
+      console.warn('NOCTURNE duplicate application blocked.', {
+        applicationId: duplicate.id,
+        emailMatch: duplicate.emailMatches,
+        phoneMatch: duplicate.phoneMatches
+      });
+      return json({
+        error: `It looks like an application has already been submitted using this contact information. Only one NOCTURNE application is permitted per person. If you need help with your existing application, contact ${HELP_EMAIL}.`,
+        code: 'duplicate_application'
+      }, 409);
+    }
+  } catch (error) {
+    console.error('NOCTURNE duplicate application check failed:', error);
+    // Fail closed. If the existing-application records cannot be checked, do not
+    // accept a submission that might bypass the one-application rule.
+    return json({ error: 'Your application could not be checked for an existing submission. Please try again shortly.' }, 503);
+  }
+
   try {
     const rate = await enforceRateLimit(req, fields);
     if (rate.blocked) {
@@ -333,7 +392,7 @@ export default async (req) => {
     createdAt,
     fullName: clean(fields.full_name, MAX.full_name),
     preferredName: clean(fields.preferred_name, MAX.preferred_name),
-    email: clean(fields.email, MAX.email).toLowerCase(),
+    email: normalizeEmail(fields.email),
     phone: formatPhone(fields.phone),
     location: clean(fields.location, MAX.location),
     instagram: clean(fields.instagram, MAX.instagram),
