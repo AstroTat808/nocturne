@@ -104,11 +104,11 @@
     panel.className = 'admin-drink-bulk-offer';
     panel.innerHTML = `
       <div>
-        <strong>Ticket-holder drink package campaign</strong>
-        <p class="admin-muted">Email every current paid or checked-in ticket holder who does not already have the Six-Drink Package. Guests already emailed by this bulk campaign today are skipped automatically.</p>
+        <strong>Ticket-holder add-on campaign</strong>
+        <p class="admin-muted">Email current paid or checked-in ticket holders about add-ons they do not already have: the $55 Six-Drink Package and/or the $15 Unlimited Drinking Water Package. Guests who already have both are skipped.</p>
       </div>
       <div>
-        <button id="admin-send-bulk-drink-offer" class="admin-outline-button" type="button">Email Drink Package Offer →</button>
+        <button id="admin-send-bulk-drink-offer" class="admin-outline-button" type="button">Email Ticket Add-On Offer →</button>
         <p id="admin-send-bulk-drink-offer-status" class="admin-status" role="status" aria-live="polite"></p>
       </div>`;
     overview.append(panel);
@@ -116,23 +116,23 @@
     const button = panel.querySelector('#admin-send-bulk-drink-offer');
     const result = panel.querySelector('#admin-send-bulk-drink-offer-status');
     button.addEventListener('click', async () => {
-      if (!window.confirm('Email the Six-Drink Package offer now to ALL eligible NOCTURNE ticket holders who do not already have the package? Guests already sent this bulk offer today will be skipped.')) return;
+      if (!window.confirm('Email NOCTURNE ticket holders now about any available Six-Drink and Unlimited Water add-ons they do not already have? Guests already sent this expanded campaign today will be skipped.')) return;
       button.disabled = true;
       result.classList.remove('error');
-      result.textContent = 'Finding eligible ticket holders and sending offers…';
+      result.textContent = 'Finding eligible ticket holders and sending add-on offers…';
       try {
         const response = await fetch('/api/admin/bulk-drink-package-offer', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'send-bulk-drink-package-offer' })
+          body: JSON.stringify({ action: 'send-bulk-ticket-addon-offer' })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'The drink-package campaign could not be completed.');
-        result.textContent = `Sent ${Number(data.sent || 0)} offer${Number(data.sent || 0) === 1 ? '' : 's'} · ${Number(data.duplicate || 0)} already sent today · ${Number(data.ineligible || 0)} not eligible · ${Number(data.failed || 0)} failed`;
+        if (!response.ok) throw new Error(data.error || 'The ticket add-on campaign could not be completed.');
+        result.textContent = `Sent ${Number(data.sent || 0)} offer${Number(data.sent || 0) === 1 ? '' : 's'} · ${Number(data.bothOffers || 0)} both packages · ${Number(data.drinkOnly || 0)} drink only · ${Number(data.waterOnly || 0)} water only · ${Number(data.duplicate || 0)} already sent today · ${Number(data.ineligible || 0)} not eligible · ${Number(data.failed || 0)} failed`;
         if (Number(data.failed || 0) > 0) result.classList.add('error');
       } catch (error) {
-        result.textContent = error.message || 'The drink-package campaign could not be completed.';
+        result.textContent = error.message || 'The ticket add-on campaign could not be completed.';
         result.classList.add('error');
       } finally {
         button.disabled = false;
