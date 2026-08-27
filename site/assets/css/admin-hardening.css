@@ -56,7 +56,8 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.admin-reminder-test {
+.admin-reminder-test,
+.admin-reminder-run {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
   gap: 1.5rem;
@@ -67,9 +68,39 @@
   background: rgba(216, 154, 43, .045);
 }
 
+.admin-reminder-run {
+  border-color: rgba(106, 191, 131, .32);
+  background: linear-gradient(135deg, rgba(106, 191, 131, .055), rgba(216, 154, 43, .035));
+}
+
 .admin-reminder-test h2,
-.admin-reminder-test p {
+.admin-reminder-test p,
+.admin-reminder-run h2,
+.admin-reminder-run p {
   margin-top: .35rem;
+}
+
+.admin-reminder-run h2 {
+  margin-bottom: .55rem;
+  font-family: var(--serif);
+  font-weight: 500;
+  color: #fff2df;
+}
+
+.admin-reminder-run-note {
+  color: #8f8372;
+  font-size: .7rem;
+}
+
+.admin-reminder-run-action {
+  display: grid;
+  gap: .55rem;
+  justify-items: stretch;
+}
+
+.admin-reminder-run-action .btn {
+  width: 100%;
+  min-height: 48px;
 }
 
 .admin-reminder-test-form {
@@ -156,7 +187,8 @@
     width: 100%;
   }
 
-  .admin-reminder-test {
+  .admin-reminder-test,
+  .admin-reminder-run {
     grid-template-columns: 1fr;
   }
 }
