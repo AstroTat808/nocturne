@@ -90,7 +90,7 @@ function validate(fields) {
   if (phoneDigits(phone).length !== 10) return 'Please enter a valid 10-digit mobile number.';
   if (!location) return 'Location is required.';
   if (!referral) return 'Referral source is required.';
-  if (whyNocturne.length < 50) return 'Please tell us a little more about why you want to attend.';
+  if (whyNocturne.length < 30) return 'Please tell us a little more about why you want to attend.';
   if (clean(fields.conduct_ack) !== 'yes') return 'The Code of Conduct acknowledgement is required.';
   if (clean(fields.selection_ack) !== 'yes') return 'The selection acknowledgement is required.';
   if (clean(fields.privacy_ack) !== 'yes') return 'The Privacy Notice acknowledgement is required.';

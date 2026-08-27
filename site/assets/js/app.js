@@ -168,8 +168,8 @@ if (form) {
     event.preventDefault();
 
     const narrative = form.querySelector('[name="why_nocturne"]');
-    if (narrative && narrative.value.trim().length < 50) {
-      status.textContent = 'Please tell us a little more — at least 50 characters.';
+    if (narrative && narrative.value.trim().length < 30) {
+      status.textContent = 'Please tell us a little more — at least 30 characters.';
       narrative.focus();
       return;
     }
