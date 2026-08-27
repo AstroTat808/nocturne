@@ -8,6 +8,7 @@ const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
 const ORDER_STORE = 'nocturne-ticket-orders';
 const EMAIL_EVENT_STORE = 'nocturne-email-events';
+
 function remindersEnabled() {
   return String(process.env.NOCTURNE_PURCHASE_REMINDERS_ENABLED || '').toLowerCase() === 'true'
     && String(process.env.NOCTURNE_PURCHASE_REMINDERS_MODE || 'test').toLowerCase() === 'live';
@@ -54,12 +55,16 @@ async function processCandidate(submissionId, dateKey, stores) {
   }
 }
 
-export default async () => {
-  if (!remindersEnabled()) return;
-  if (!beforeEvent()) return;
+export async function runPurchaseReminders({ trigger = 'schedule', scanAll = false } = {}) {
+  if (!remindersEnabled()) {
+    return { enabled: false, reason: 'Purchase reminders are not enabled in live mode.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, failed: 0 };
+  }
+  if (!beforeEvent()) {
+    return { enabled: true, reason: 'The event start cutoff has passed.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, failed: 0 };
+  }
   if (!process.env.RESEND_API_KEY || !process.env.NOCTURNE_EMAIL_FROM) {
     console.error('NOCTURNE daily purchase reminders are enabled but email is not configured.');
-    return;
+    return { enabled: true, reason: 'Email is not configured.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, failed: 0 };
   }
 
   const stores = {
@@ -70,8 +75,8 @@ export default async () => {
   };
   const { blobs } = await stores.reviews.list();
   const dateKey = honoluluDate();
-  const limit = Math.max(1, Math.min(Number(process.env.NOCTURNE_PURCHASE_REMINDER_BATCH_LIMIT || 100), 250));
-  const ids = blobs.map(({ key }) => key).slice(0, limit);
+  const scheduledLimit = Math.max(1, Math.min(Number(process.env.NOCTURNE_PURCHASE_REMINDER_BATCH_LIMIT || 100), 250));
+  const ids = blobs.map(({ key }) => key).slice(0, scanAll ? blobs.length : scheduledLimit);
   const results = [];
   for (let index = 0; index < ids.length; index += 5) {
     results.push(...await Promise.all(ids.slice(index, index + 5).map((id) => processCandidate(id, dateKey, stores))));
@@ -81,16 +86,34 @@ export default async () => {
     counts[result.status] = (counts[result.status] || 0) + 1;
     return counts;
   }, {});
-  console.log('NOCTURNE daily purchase reminder run:', { dateKey, ...summary });
-  await writeAudit('purchase_reminder.run', { dateKey, sent: summary.sent || 0, failed: summary.failed || 0, scanned: ids.length });
+  const output = {
+    enabled: true,
+    dateKey,
+    trigger,
+    scanned: ids.length,
+    sent: summary.sent || 0,
+    duplicate: summary.duplicate || 0,
+    ineligible: summary.ineligible || 0,
+    failed: summary.failed || 0
+  };
+
+  console.log('NOCTURNE daily purchase reminder run:', output);
+  await writeAudit('purchase_reminder.run', output);
   if (summary.failed) {
     await sendOpsAlert('Purchase reminder failures', [
       `Date: ${dateKey}`,
+      `Trigger: ${trigger}`,
       `Sent: ${summary.sent || 0}`,
       `Failed: ${summary.failed}`,
       'Review the Netlify function log for daily-purchase-reminders.'
     ]).catch((error) => console.error('NOCTURNE reminder alert failed:', error));
   }
+
+  return output;
 }
+
+export default async () => {
+  await runPurchaseReminders();
+};
 
 export const config = { schedule: '0 20 * * *' };
