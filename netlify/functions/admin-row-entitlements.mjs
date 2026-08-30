@@ -112,7 +112,20 @@ export default async (req) => {
       };
     }))).filter(Boolean);
 
-    return json({ entries });
+    const summary = entries.reduce((counts, entry) => {
+      if (entry.drinkPackagePurchased) counts.drinkPackagePurchases += 1;
+      if (entry.waterPackagePurchased) counts.waterPackagePurchases += 1;
+      if (entry.hasDrinkPackage) counts.activeDrinkPackages += 1;
+      if (entry.hasWaterPackage) counts.activeWaterPackages += 1;
+      return counts;
+    }, {
+      drinkPackagePurchases: 0,
+      waterPackagePurchases: 0,
+      activeDrinkPackages: 0,
+      activeWaterPackages: 0
+    });
+
+    return json({ entries, summary });
   } catch (error) {
     console.error('NOCTURNE admin row entitlement lookup failed:', error);
     return json({ error: 'Ticket/package indicators could not be loaded.' }, 500);
