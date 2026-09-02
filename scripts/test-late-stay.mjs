@@ -9,6 +9,7 @@ const check = (condition, message) => { if (!condition) failures.push(message); 
 const has = (source, value, message) => check(source.includes(value), message);
 
 const helper = read('netlify/functions/_late-stay.mjs');
+const ticketAccess = read('netlify/functions/ticket-access.mjs');
 const checkout = read('netlify/functions/create-checkout.mjs');
 const addonCheckout = read('netlify/functions/create-late-stay-checkout.mjs');
 const ticketApi = read('netlify/functions/ticket-late-stay.mjs');
@@ -21,6 +22,7 @@ const campaign = read('netlify/functions/admin-bulk-drink-package-offer.mjs');
 const adminEntitlements = read('netlify/functions/admin-row-entitlements.mjs');
 const adminJs = read('site/assets/js/admin-drinks.js');
 const refund = read('netlify/functions/admin-admission-refund.mjs');
+const deletion = read('netlify/functions/admin-delete-application.mjs');
 const netlify = read('netlify.toml');
 const envExample = read('.env.example');
 
@@ -32,7 +34,9 @@ has(helper, '{ onlyIfNew: true }', 'New capacity slot claims must use an atomic 
 has(helper, '{ onlyIfMatch: entry.etag }', 'Existing capacity slot updates must use ETag concurrency protection.');
 has(helper, "status: 'sold'", 'Paid late-stay reservations must become sold slots.');
 
-has(checkout, "name=\"late_stay\"", 'Initial ticket checkout must expose the late-stay option through ticket-access input.');
+has(ticketAccess, 'name="late_stay"', 'Private ticket checkout must expose the late-stay option.');
+has(ticketAccess, 'name="late_stay_policy"', 'Private ticket checkout must require late-stay acknowledgment.');
+has(ticketAccess, 'spots currently available', 'Private ticket checkout must show live late-stay availability.');
 has(checkout, "'metadata[lateStay]'", 'Initial Stripe checkout must include late-stay metadata.');
 has(checkout, 'lateStay.priceCents', 'Initial checkout total must include the configured late-stay price.');
 has(checkout, 'reserveLateStaySlot', 'Initial ticket checkout must reserve capacity before Stripe payment.');
@@ -46,6 +50,7 @@ has(router, "purchaseType === 'late-stay-addon'", 'Webhook router must intercept
 has(router, 'reconcileLateStayCheckout', 'Post-ticket webhook must reconcile the paid late-stay entitlement.');
 
 has(ticketApi, 'lateStayAvailability', 'Digital ticket late-stay API must report live capacity.');
+has(ticketApi, 'checkoutPending(summary)', 'Expired late-stay checkout sessions must not trap the ticket in a permanent pending state.');
 has(ticketJs, 'Late Checkout / Car Camping', 'Digital ticket must display the late-stay add-on.');
 has(ticketJs, 'LATE STAY · 8AM', 'Staff ticket view must surface the late-stay entitlement.');
 
@@ -64,6 +69,8 @@ has(refund, 'bundledAddOnCents', 'Admission refund calculation must explicitly r
 has(refund, 'lateStayPriceCents', 'Admission refund calculation must account for the bundled late-stay price.');
 has(refund, "lateStayStatus: 'forfeited'", 'Admission refunds must forfeit late-stay access without refunding it.');
 has(refund, "'metadata[lateStayRefunded]': 'false'", 'Stripe admission refund metadata must explicitly retain late-stay dollars.');
+has(deletion, 'lateStayPurchased', 'Force-delete accounting tombstones must retain late-stay purchase history.');
+has(deletion, 'lateStayCheckoutSessionId', 'Force-delete accounting must retain late-stay checkout identity.');
 
 has(netlify, 'from = "/api/ticket/late-stay"', 'Netlify must route late-stay digital ticket status.');
 has(netlify, 'from = "/ticket/late-stay/checkout"', 'Netlify must route late-stay checkout.');
