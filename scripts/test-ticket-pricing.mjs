@@ -56,7 +56,10 @@ has(env, 'NOCTURNE_TICKET_PRICE_AFTER_CENTS=3500', 'Environment example must doc
 has(env, 'NOCTURNE_TICKET_PRICE_CHANGE_ISO=2026-09-02T00:00:00-10:00', 'Environment example must document the midnight HST cutoff.');
 
 has(publicInjector, 'Ticket price increases tonight.', 'Public pages must prominently announce the ticket price increase.');
-has(publicInjector, 'The price becomes $35 at midnight.', 'Public price alert must state the $35 midnight price.');
+has(publicInjector, 'The price becomes $35 at 12:00 AM HST September 2.', 'Public price alert must state the exact $35 Sept. 2 cutoff.');
+has(publicInjector, '$25 through September 1 · $35 starting at 12:00 AM HST September 2', 'Every public ticket-price message must have explicit transition copy available.');
+has(publicInjector, 'ticket-price-change-note', 'Public ticket fact cards must display an emphasized $35 Sept. 2 note.');
+has(publicInjector, '$25 THROUGH SEPT 1 · $35 STARTING MIDNIGHT SEPT 2', 'Public marquee must carry both ticket prices and the cutoff.');
 has(publicInjector, 'Six-Drink Package', 'Public add-on section must include the Six-Drink Package.');
 has(publicInjector, 'Unlimited Drinking Water', 'Public add-on section must include Unlimited Drinking Water.');
 has(publicInjector, 'Late Checkout /', 'Public add-on section must include Late Checkout / Car Camping.');
@@ -66,9 +69,11 @@ check(!/\bbeer\b|\bcocktails?\b|\bpremium cocktails?\b|\bpaid at the bar\b/i.tes
 has(publicInjector, 'html.replace(/<div class="event-facts"', 'Public add-ons must be injected adjacent to the event facts.');
 has(publicInjector, '(eventFacts) => `${eventFacts}${addOns}`', 'Public add-on injection must use a function replacement so $15/$20/$55 remain literal prices.');
 check(!publicInjector.includes('`$1${addOns}`'), 'Public add-on injection must never use a replacement string where $15 can be parsed as a capture reference.');
-has(publicPricing, 'deadlinePhrases', 'Public runtime pricing must protect historical deadline wording after the cutoff.');
+has(publicPricing, 'data-ticket-price-transition', 'Public runtime pricing must preserve explicit price-transition messages after the cutoff.');
+has(publicPricing, 'data-ticket-current-price', 'Public runtime pricing must update the current-price field independently.');
 has(publicPricing, "alert.querySelector('strong').textContent = 'Current ticket price'", 'Public price alert must become current-price messaging after the cutoff.');
 has(publicOffersCss, '.ticket-price-alert', 'Public price alert must have dedicated styling.');
+has(publicOffersCss, '.ticket-price-change-note', 'Public ticket card cutoff note must have dedicated emphasis styling.');
 has(publicOffersCss, '.public-addon-grid', 'Public add-on section must have responsive card styling.');
 
 if (failures.length) {
