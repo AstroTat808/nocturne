@@ -58,26 +58,22 @@ async function checkoutInput(req) {
       const form = await req.formData();
       return {
         drinkPackage: drinkPackageRequested(form.get('drink_package')),
-        drinkPolicyAccepted: String(form.get('drink_package_policy') || '').toLowerCase() === 'yes',
         waterPackage: requested(form.get('water_package')),
-        waterPolicyAccepted: String(form.get('water_package_policy') || '').toLowerCase() === 'yes',
         lateStay: requested(form.get('late_stay')),
-        lateStayPolicyAccepted: String(form.get('late_stay_policy') || '').toLowerCase() === 'yes'
+        packagePolicyAccepted: String(form.get('package_policy') || '').toLowerCase() === 'yes'
       };
     }
     if (contentType.includes('application/json')) {
       const data = await req.json();
       return {
         drinkPackage: drinkPackageRequested(data?.drinkPackage),
-        drinkPolicyAccepted: data?.drinkPackagePolicy === true || requested(data?.drinkPackagePolicy),
         waterPackage: requested(data?.waterPackage),
-        waterPolicyAccepted: data?.waterPackagePolicy === true || requested(data?.waterPackagePolicy),
         lateStay: requested(data?.lateStay),
-        lateStayPolicyAccepted: data?.lateStayPolicy === true || requested(data?.lateStayPolicy)
+        packagePolicyAccepted: data?.packagePolicy === true || requested(data?.packagePolicy)
       };
     }
   } catch {}
-  return { drinkPackage: false, drinkPolicyAccepted: false, waterPackage: false, waterPolicyAccepted: false, lateStay: false, lateStayPolicyAccepted: false };
+  return { drinkPackage: false, waterPackage: false, lateStay: false, packagePolicyAccepted: false };
 }
 
 export default async (req) => {
@@ -96,9 +92,8 @@ export default async (req) => {
   const includeDrinkPackage = packageConfig.enabled && input.drinkPackage;
   const includeWaterPackage = waterConfig.enabled && input.waterPackage;
   const includeLateStay = lateStay.enabled && input.lateStay;
-  if (includeDrinkPackage && !input.drinkPolicyAccepted) return fail(req, 'You must acknowledge that the Six-Drink Package is FINAL SALE / NON-REFUNDABLE before checkout.', 400);
-  if (includeWaterPackage && !input.waterPolicyAccepted) return fail(req, 'You must acknowledge that the Unlimited Drinking Water Package is FINAL SALE / NON-REFUNDABLE before checkout.', 400);
-  if (includeLateStay && !input.lateStayPolicyAccepted) return fail(req, 'You must acknowledge that Late Checkout / Car Camping is FINAL SALE / NON-REFUNDABLE before checkout.', 400);
+  const anyAddOnSelected = includeDrinkPackage || includeWaterPackage || includeLateStay;
+  if (anyAddOnSelected && !input.packagePolicyAccepted) return fail(req, 'You must acknowledge that all selected add-ons are FINAL SALE / NON-REFUNDABLE before checkout.', 400);
 
   const submissionId = access.submissionId;
   const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
@@ -152,12 +147,14 @@ export default async (req) => {
     mode: 'payment', success_url: `${baseUrl}/ticket-confirmed?session_id={CHECKOUT_SESSION_ID}&return_token=${encodeURIComponent(returnToken)}`, cancel_url: `${baseUrl}/ticket-access?checkout=cancelled`, client_reference_id: submissionId,
     'metadata[submissionId]': submissionId, 'metadata[event]': 'NOCTURNE',
     'metadata[ticketAmount]': String(unitAmount), 'metadata[ticketPriceTier]': pricing.changed ? '35' : '25', 'metadata[ticketPriceChangeAt]': pricing.changeAt,
+    'metadata[packagePolicyAccepted]': anyAddOnSelected ? 'true' : 'false',
     'metadata[drinkPackage]': includeDrinkPackage ? 'six-credit' : 'none', 'metadata[drinkCredits]': includeDrinkPackage ? String(packageConfig.credits) : '0', 'metadata[drinkPackagePolicyAccepted]': includeDrinkPackage ? 'true' : 'false',
     'metadata[waterPackage]': includeWaterPackage ? 'unlimited' : 'none', 'metadata[waterPackagePolicyAccepted]': includeWaterPackage ? 'true' : 'false',
     'metadata[lateStay]': includeLateStay ? 'until-8am' : 'none', 'metadata[lateStayPolicyAccepted]': includeLateStay ? 'true' : 'false',
     'metadata[lateStaySlot]': includeLateStay ? String(lateStayReservation.slot) : '', 'metadata[lateStayReservationId]': includeLateStay ? lateStayReservation.reservationId : '',
     'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': currency, 'line_items[0][price_data][unit_amount]': String(unitAmount), 'line_items[0][price_data][product_data][name]': productName,
     'payment_intent_data[metadata][submissionId]': submissionId, 'payment_intent_data[metadata][event]': 'NOCTURNE', 'payment_intent_data[metadata][ticketAmount]': String(unitAmount), 'payment_intent_data[metadata][ticketPriceTier]': pricing.changed ? '35' : '25',
+    'payment_intent_data[metadata][packagePolicyAccepted]': anyAddOnSelected ? 'true' : 'false',
     'payment_intent_data[metadata][drinkPackage]': includeDrinkPackage ? 'six-credit' : 'none', 'payment_intent_data[metadata][drinkPackagePolicyAccepted]': includeDrinkPackage ? 'true' : 'false',
     'payment_intent_data[metadata][waterPackage]': includeWaterPackage ? 'unlimited' : 'none', 'payment_intent_data[metadata][waterPackagePolicyAccepted]': includeWaterPackage ? 'true' : 'false',
     'payment_intent_data[metadata][lateStay]': includeLateStay ? 'until-8am' : 'none', 'payment_intent_data[metadata][lateStaySlot]': includeLateStay ? String(lateStayReservation.slot) : ''
@@ -201,7 +198,7 @@ export default async (req) => {
     const checkoutExpiresAt = session.expires_at ? new Date(Number(session.expires_at) * 1000).toISOString() : null;
     const record = {
       stripeCheckoutSessionId: session.id, submissionId, status: 'checkout_created', amountTotal: expectedAmountTotal, ticketAmount: unitAmount,
-      ticketPriceTier: pricing.changed ? '35' : '25', ticketPriceChangeAt: pricing.changeAt,
+      ticketPriceTier: pricing.changed ? '35' : '25', ticketPriceChangeAt: pricing.changeAt, packagePolicyAccepted: anyAddOnSelected ? true : null,
       drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, drinkPackagePriceCents: includeDrinkPackage ? packageConfig.priceCents : 0, drinkCreditsPurchased: includeDrinkPackage ? packageConfig.credits : 0,
       waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, waterPackagePriceCents: includeWaterPackage ? waterConfig.priceCents : 0,
       lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayPriceCents: includeLateStay ? lateStay.priceCents : 0,
@@ -217,7 +214,7 @@ export default async (req) => {
       throw new Error('Ticket eligibility changed while checkout was being prepared.');
     }
     await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'completed', stripeCheckoutSessionId: session.id, checkoutExpiresAt, lateStaySlot: lateStayReservation?.slot || null, lateStayReservationId: lateStayReservation?.reservationId || null, updatedAt: createdAt });
-    await writeAudit('checkout.created', { submissionId, stripeCheckoutSessionId: session.id, ticketAmount: unitAmount, ticketPriceTier: pricing.changed ? '35' : '25', ticketPriceChangeAt: pricing.changeAt, drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayFinalSaleNonRefundable: includeLateStay ? true : null, lateStaySlot: lateStayReservation?.slot || null, expectedAmountTotal });
+    await writeAudit('checkout.created', { submissionId, stripeCheckoutSessionId: session.id, ticketAmount: unitAmount, ticketPriceTier: pricing.changed ? '35' : '25', ticketPriceChangeAt: pricing.changeAt, packagePolicyAccepted: anyAddOnSelected ? true : null, drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayFinalSaleNonRefundable: includeLateStay ? true : null, lateStaySlot: lateStayReservation?.slot || null, expectedAmountTotal });
     return browserFormPost(req) ? redirect(session.url) : json({ ok: true, checkoutUrl: session.url, ticketAmount: unitAmount, ticketPriceTier: pricing.changed ? '35' : '25' });
   } catch (error) {
     if (lateStayReservation) await releaseLateStayReservation({ slot: lateStayReservation.slot, reservationId: lateStayReservation.reservationId, reason: 'ticket_checkout_failed' }).catch(() => {});
