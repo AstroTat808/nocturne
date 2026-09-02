@@ -39,6 +39,7 @@ const env = read('.env.example');
 const publicPricing = read('site/assets/js/public-ticket-pricing.js');
 const publicInjector = read('scripts/inject-public-ticket-pricing.mjs');
 const publicOffersCss = read('site/assets/css/public-offers.css');
+const eventFactsCss = read('site/assets/css/event-facts-polish.css');
 
 has(checkout, "from './_ticket-pricing.mjs'", 'Stripe checkout must use centralized ticket pricing.');
 has(checkout, '`price-${unitAmount}`', 'Checkout idempotency must include the current ticket price.');
@@ -58,7 +59,10 @@ has(env, 'NOCTURNE_TICKET_PRICE_CHANGE_ISO=2026-09-02T00:00:00-10:00', 'Environm
 has(publicInjector, 'Ticket price increases tonight.', 'Public pages must prominently announce the ticket price increase.');
 has(publicInjector, 'The price becomes $35 at 12:00 AM HST September 2.', 'Public price alert must state the exact $35 Sept. 2 cutoff.');
 has(publicInjector, '$25 through September 1 · $35 starting at 12:00 AM HST September 2', 'Every public ticket-price message must have explicit transition copy available.');
-has(publicInjector, 'ticket-price-change-note', 'Public ticket fact cards must display an emphasized $35 Sept. 2 note.');
+has(publicInjector, 'event-fact-ticket', 'Public ticket fact must use the polished ticket-card layout.');
+has(publicInjector, 'data-ticket-price-window', 'Public ticket fact must expose the current price-window copy for runtime updates.');
+has(publicInjector, 'data-ticket-price-increase', 'Public ticket fact must expose the price-increase callout for runtime updates.');
+has(publicInjector, 'event-facts-polish.css', 'Public pages must load the polished event-fact stylesheet.');
 has(publicInjector, '$25 THROUGH SEPT 1 · $35 STARTING MIDNIGHT SEPT 2', 'Public marquee must carry both ticket prices and the cutoff.');
 has(publicInjector, 'Six-Drink Package', 'Public add-on section must include the Six-Drink Package.');
 has(publicInjector, 'Unlimited Drinking Water', 'Public add-on section must include Unlimited Drinking Water.');
@@ -72,12 +76,18 @@ check(!publicInjector.includes('`$1${addOns}`'), 'Public add-on injection must n
 has(publicInjector, 'html.replace(/<\\/header>\\s*<main id="main">/', 'Public price alert must be injected after the fixed site header, not inside the header overlay area.');
 has(publicPricing, 'data-ticket-price-transition', 'Public runtime pricing must preserve explicit price-transition messages after the cutoff.');
 has(publicPricing, 'data-ticket-current-price', 'Public runtime pricing must update the current-price field independently.');
+has(publicPricing, 'data-ticket-price-window', 'Runtime pricing must update the polished ticket price-window copy.');
+has(publicPricing, 'data-ticket-price-increase', 'Runtime pricing must update the polished ticket increase callout.');
+has(publicPricing, 'Price increase now in effect', 'Runtime pricing must replace pre-cutoff urgency copy after midnight.');
 has(publicPricing, "alert.querySelector('strong').textContent = 'Current ticket price'", 'Public price alert must become current-price messaging after the cutoff.');
 has(publicOffersCss, '.ticket-price-alert', 'Public price alert must have dedicated styling.');
 has(publicOffersCss, 'margin-top:82px', 'Desktop price alert must clear the fixed 82px site header.');
 has(publicOffersCss, 'margin-top:68px', 'Mobile price alert must clear the fixed 68px site header.');
-has(publicOffersCss, '.ticket-price-change-note', 'Public ticket card cutoff note must have dedicated emphasis styling.');
 has(publicOffersCss, '.public-addon-grid', 'Public add-on section must have responsive card styling.');
+has(eventFactsCss, '.event-fact>strong', 'Polished event facts must scope headline typography to direct-child headings only.');
+has(eventFactsCss, '.event-fact-ticket .ticket-price-increase strong', 'Ticket increase emphasis must stay compact instead of inheriting giant fact-card typography.');
+has(eventFactsCss, 'min-height:196px', 'Desktop event fact cards must share a deliberate consistent height.');
+has(eventFactsCss, '@media(max-width:640px)', 'Polished event facts must include mobile spacing rules.');
 
 if (failures.length) {
   console.error('Ticket pricing regression checks failed:');
