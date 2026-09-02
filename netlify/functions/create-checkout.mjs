@@ -4,7 +4,7 @@ import { makeReentryToken, readTicketAccess } from './_ticket-auth.mjs';
 import { writeAudit } from './_audit.mjs';
 import { drinkPackageConfig, drinkPackageRequested } from './_drink-package.mjs';
 import { waterPackageConfig } from './_water-package.mjs';
-import { lateStayAvailability, lateStayConfig, releaseLateStayReservation, reserveLateStaySlot } from './_late-stay.mjs';
+import { lateStayAvailability, lateStayConfig, LATE_STAY_POLICY_TEXT, releaseLateStayReservation, reserveLateStaySlot } from './_late-stay.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -94,7 +94,7 @@ export default async (req) => {
   const includeLateStay = lateStay.enabled && input.lateStay;
   if (includeDrinkPackage && !input.drinkPolicyAccepted) return fail(req, 'You must acknowledge that the Six-Drink Package is FINAL SALE / NON-REFUNDABLE before checkout.', 400);
   if (includeWaterPackage && !input.waterPolicyAccepted) return fail(req, 'You must acknowledge that the Unlimited Drinking Water Package is FINAL SALE / NON-REFUNDABLE before checkout.', 400);
-  if (includeLateStay && !input.lateStayPolicyAccepted) return fail(req, 'You must acknowledge the Late Checkout / Car Camping terms before checkout.', 400);
+  if (includeLateStay && !input.lateStayPolicyAccepted) return fail(req, 'You must acknowledge that Late Checkout / Car Camping is FINAL SALE / NON-REFUNDABLE before checkout.', 400);
 
   const submissionId = access.submissionId;
   const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
@@ -180,8 +180,8 @@ export default async (req) => {
     params[`line_items[${lineIndex}][quantity]`] = '1';
     params[`line_items[${lineIndex}][price_data][currency]`] = currency;
     params[`line_items[${lineIndex}][price_data][unit_amount]`] = String(lateStay.priceCents);
-    params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Late Checkout / Car Camping';
-    params[`line_items[${lineIndex}][price_data][product_data][description]`] = 'Limited to 30 guests. Stay on the property after the 3:00 AM event end until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff. Each person remaining after 3:00 AM needs their own add-on. Final sale and non-transferable.';
+    params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Late Checkout / Car Camping — NON-REFUNDABLE';
+    params[`line_items[${lineIndex}][price_data][product_data][description]`] = `FINAL SALE / NON-REFUNDABLE. ${LATE_STAY_POLICY_TEXT} Limited to 30 guests. Stay on the property after the 3:00 AM event end until 8:00 AM. Each person remaining after 3:00 AM needs their own add-on.`;
   }
   if (application.email) params.customer_email = application.email;
   if (process.env.NOCTURNE_TICKET_DESCRIPTION) params['line_items[0][price_data][product_data][description]'] = String(process.env.NOCTURNE_TICKET_DESCRIPTION).slice(0, 500);
@@ -208,7 +208,7 @@ export default async (req) => {
       throw new Error('Ticket eligibility changed while checkout was being prepared.');
     }
     await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'completed', stripeCheckoutSessionId: session.id, checkoutExpiresAt, lateStaySlot: lateStayReservation?.slot || null, lateStayReservationId: lateStayReservation?.reservationId || null, updatedAt: createdAt });
-    await writeAudit('checkout.created', { submissionId, stripeCheckoutSessionId: session.id, drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStaySlot: lateStayReservation?.slot || null, expectedAmountTotal });
+    await writeAudit('checkout.created', { submissionId, stripeCheckoutSessionId: session.id, drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayFinalSaleNonRefundable: includeLateStay ? true : null, lateStaySlot: lateStayReservation?.slot || null, expectedAmountTotal });
     return browserFormPost(req) ? redirect(session.url) : json({ ok: true, checkoutUrl: session.url });
   } catch (error) {
     if (lateStayReservation) await releaseLateStayReservation({ slot: lateStayReservation.slot, reservationId: lateStayReservation.reservationId, reason: 'ticket_checkout_failed' }).catch(() => {});
