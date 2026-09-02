@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const scriptTag = '<script src="/assets/js/public-ticket-pricing.js?v=20260901c" defer></script>';
+const scriptTag = '<script src="/assets/js/public-ticket-pricing.js?v=20260901d" defer></script>';
 const styleTag = '<link rel="stylesheet" href="/assets/css/public-offers.css?v=20260901b">';
+const factStyleTag = '<link rel="stylesheet" href="/assets/css/event-facts-polish.css?v=20260901a">';
 const files = ['site/index.html', 'site/festival.html'];
 
 const transitionText = '<span data-ticket-price-transition>$25 through September 1 · $35 starting at 12:00 AM HST September 2</span>';
@@ -31,6 +32,10 @@ const addOns = `
 
 const addOnFaq = `<div class="faq-item"><button aria-expanded="false"><span>What optional add-ons are available?</span><span class="plus">+</span></button><div class="faq-answer"><p>Approved ticket holders can choose from the <strong>$55 Six-Drink Package</strong>, <strong>$15 Unlimited Drinking Water Package</strong>, and <strong>$20 Late Checkout / Car Camping</strong> add-on. The Six-Drink Package includes six beverage credits. Unlimited Water covers drinking-water service during festival operating hours. Late Checkout / Car Camping allows the registered ticket holder to remain on the property after 3:00 AM until 8:00 AM and is limited to the first 30 purchasers. All add-ons are personal, non-transferable, <strong>final sale / non-refundable</strong>, and subject to availability.</p></div></div>`;
 
+function ticketCard(note) {
+  return `<article class="event-fact event-fact-ticket"><small>Ticket</small><strong class="ticket-price-current" data-ticket-current-price>$25</strong><p class="ticket-price-window" data-ticket-price-window>Approved admission through <strong>11:59 PM HST September 1</strong></p><p class="ticket-price-increase" data-ticket-price-increase>Price increases to <strong>$35</strong> at <strong>12:00 AM HST September 2</strong></p><p class="ticket-price-note">${note}</p></article>`;
+}
+
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -44,8 +49,8 @@ function applyVisiblePriceMessaging(html) {
   const replacements = [
     ['<span>$25 if approved</span>', `<span>${transitionShort}</span>`],
     ['Approved applicants receive access to purchase a $25 ticket, subject to availability.', `Approved applicants receive access to purchase admission at ${transitionText}, subject to availability.`],
-    ['<article class="event-fact"><small>Ticket</small><strong>$25</strong><p>Available only after your invitation request is approved.</p></article>', `<article class="event-fact"><small>Ticket</small><strong data-ticket-current-price>$25</strong><p><strong class="ticket-price-change-note">$35 starting at 12:00 AM HST September 2.</strong><br>Available only after your invitation request is approved.</p></article>`],
-    ['<article class="event-fact"><small>Ticket</small><strong>$25</strong><p>Private checkout becomes available after an invitation request is approved.</p></article>', `<article class="event-fact"><small>Ticket</small><strong data-ticket-current-price>$25</strong><p><strong class="ticket-price-change-note">$35 starting at 12:00 AM HST September 2.</strong><br>Private checkout becomes available after your invitation request is approved.</p></article>`],
+    ['<article class="event-fact"><small>Ticket</small><strong>$25</strong><p>Available only after your invitation request is approved.</p></article>', ticketCard('Available only after your invitation request is approved.')],
+    ['<article class="event-fact"><small>Ticket</small><strong>$25</strong><p>Private checkout becomes available after an invitation request is approved.</p></article>', ticketCard('Private checkout becomes available after your invitation request is approved.')],
     ['$25 APPROVED ACCESS', '$25 THROUGH SEPT 1 · $35 STARTING MIDNIGHT SEPT 2'],
     ['Tickets are $25 and are not offered through an open public sale.', `Tickets are ${transitionText} and are not offered through an open public sale.`],
     ['Redeem your invitation to unlock the private $25 ticket checkout.', `Redeem your invitation to unlock private ticket checkout: ${transitionText}.`],
@@ -68,6 +73,7 @@ for (const relative of files) {
   let html = fs.readFileSync(file, 'utf8');
 
   if (!html.includes(styleTag)) html = html.replace('</head>', `  ${styleTag}\n</head>`);
+  if (!html.includes(factStyleTag)) html = html.replace('</head>', `  ${factStyleTag}\n</head>`);
   if (!html.includes(scriptTag)) html = html.replace('</body>', `  ${scriptTag}\n</body>`);
 
   html = html.replace(/(<meta[^>]+content=")[^"]*\$25[^"]*("[^>]*>)/gi, (match) => {
@@ -91,4 +97,4 @@ for (const relative of files) {
   fs.writeFileSync(file, html);
 }
 
-console.log('Public ticket-price alert, transition messaging, and optional add-ons injected.');
+console.log('Public ticket-price alert, polished event facts, transition messaging, and optional add-ons injected.');
