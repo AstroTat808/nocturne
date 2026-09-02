@@ -4,6 +4,12 @@
   const originalPaidCard = statsGrid?.querySelector('[data-ticket-state-filter="paid"]');
   const list = document.querySelector('#admin-application-list');
   const refreshButton = document.querySelector('#admin-refresh');
+  const ticketOverview = document.querySelector('.admin-ticket-overview:not(.admin-drink-overview)');
+  const drinkOverview = document.querySelector('.admin-drink-overview');
+
+  if (ticketOverview && drinkOverview && ticketOverview.nextElementSibling !== drinkOverview) {
+    drinkOverview.parentNode?.insertBefore(ticketOverview, drinkOverview);
+  }
 
   if (!dashboard || !statsGrid || !originalPaidCard) return;
 
