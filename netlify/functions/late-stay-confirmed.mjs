@@ -1,5 +1,5 @@
 import { getStore } from '@netlify/blobs';
-import { reconcileLateStayCheckout } from './_late-stay.mjs';
+import { LATE_STAY_POLICY_TEXT, reconcileLateStayCheckout } from './_late-stay.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -25,7 +25,8 @@ function page({ confirmed = false, pending = false, cancelled = false, message =
       : pending
         ? 'NOCTURNE is verifying the Stripe payment. Do not submit another payment.'
         : 'Use your original digital ticket to try again, or contact help@nocturnefestival.com.';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#030303"><meta name="robots" content="noindex,nofollow,noarchive">${pending ? '<meta http-equiv="refresh" content="3">' : ''}<title>${escapeHtml(kicker)} | NOCTURNE</title><link rel="icon" href="/assets/images/favicon.png"><link rel="stylesheet" href="/assets/css/styles.css"><link rel="stylesheet" href="/assets/css/private-access.css"></head><body class="private-access-page"><main class="private-access-shell"><section class="private-access-card"><div class="private-access-logo-wrap"><img class="private-access-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768"></div><p class="section-kicker">${escapeHtml(kicker)}</p><h1>${escapeHtml(heading)}</h1>${status}<p>${escapeHtml(copy)}</p>${confirmed ? '<div class="private-access-status"><strong>FINAL SALE / NON-TRANSFERABLE</strong><br>This limited-capacity add-on is attached to one registered ticket holder and cannot be transferred to another guest.</div>' : ''}<div class="private-access-actions"><a class="btn secondary" href="/">Return to NOCTURNE</a></div></section></main></body></html>`;
+  const policy = confirmed ? `<div class="private-access-status"><strong>FINAL SALE / NON-REFUNDABLE</strong><br>${escapeHtml(LATE_STAY_POLICY_TEXT)}</div>` : '';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#030303"><meta name="robots" content="noindex,nofollow,noarchive">${pending ? '<meta http-equiv="refresh" content="3">' : ''}<title>${escapeHtml(kicker)} | NOCTURNE</title><link rel="icon" href="/assets/images/favicon.png"><link rel="stylesheet" href="/assets/css/styles.css"><link rel="stylesheet" href="/assets/css/private-access.css"></head><body class="private-access-page"><main class="private-access-shell"><section class="private-access-card"><div class="private-access-logo-wrap"><img class="private-access-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768"></div><p class="section-kicker">${escapeHtml(kicker)}</p><h1>${escapeHtml(heading)}</h1>${status}<p>${escapeHtml(copy)}</p>${policy}<div class="private-access-actions"><a class="btn secondary" href="/">Return to NOCTURNE</a></div></section></main></body></html>`;
 }
 
 export default async (req) => {
