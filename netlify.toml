@@ -136,6 +136,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/ticket/late-stay"
+  to = "/.netlify/functions/ticket-late-stay"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/ticket-access/reenter"
   to = "/.netlify/functions/ticket-reentry"
   status = 200
@@ -186,6 +192,18 @@
 [[redirects]]
   from = "/ticket/water/confirmed"
   to = "/.netlify/functions/water-package-confirmed"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/late-stay/checkout"
+  to = "/.netlify/functions/create-late-stay-checkout"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/late-stay/confirmed"
+  to = "/.netlify/functions/late-stay-confirmed"
   status = 200
   force = true
 
@@ -258,31 +276,3 @@
     X-Content-Type-Options = "nosniff"
     X-Frame-Options = "DENY"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(self), microphone=(), geolocation=(), payment=()"
-    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
-    Content-Security-Policy = "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; form-action 'self' https://checkout.stripe.com; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
-
-[[headers]]
-  for = "/invite*"
-  [headers.values]
-    Cache-Control = "no-store"
-
-[[headers]]
-  for = "/ticket*"
-  [headers.values]
-    Cache-Control = "no-store"
-
-[[headers]]
-  for = "/admin*"
-  [headers.values]
-    Cache-Control = "no-store"
-
-[[headers]]
-  for = "/check-in*"
-  [headers.values]
-    Cache-Control = "no-store"
-
-[[headers]]
-  for = "/bar*"
-  [headers.values]
-    Cache-Control = "no-store"
