@@ -6,11 +6,17 @@ const mustContain = (path, values) => {
   const source = read(path);
   for (const value of values) assert.ok(source.includes(value), `${path} must contain: ${value}`);
 };
+const mustNotContain = (path, values) => {
+  const source = read(path);
+  for (const value of values) assert.ok(!source.includes(value), `${path} must not contain: ${value}`);
+};
 
 mustContain('site/terms.html', ['FINAL SALE / NON-REFUNDABLE', 'Six-Drink Package', 'Unlimited Drinking Water Package']);
-mustContain('netlify/functions/ticket-access.mjs', ['drink_package_policy', 'water_package_policy', 'Add Unlimited Drinking Water', 'I understand the Unlimited Drinking Water Package is non-refundable']);
-mustContain('site/assets/js/ticket-package-policy.js', ['water_package', 'water_package_policy']);
-mustContain('netlify/functions/create-checkout.mjs', ['drinkPackagePolicyAccepted', 'waterPackagePolicyAccepted', "'metadata[waterPackage]'", 'Unlimited Drinking Water Package is FINAL SALE / NON-REFUNDABLE']);
+mustContain('netlify/functions/ticket-access.mjs', ['name="package_policy"', 'I understand all selected add-ons are FINAL SALE / NON-REFUNDABLE.', 'Add Unlimited Drinking Water']);
+mustNotContain('netlify/functions/ticket-access.mjs', ['name="drink_package_policy"', 'name="water_package_policy"', 'name="late_stay_policy"']);
+mustContain('site/assets/js/ticket-package-policy.js', ['drink_package', 'water_package', 'late_stay', 'package_policy', 'anySelected']);
+mustContain('netlify/functions/create-checkout.mjs', ['packagePolicyAccepted', 'all selected add-ons are FINAL SALE / NON-REFUNDABLE', "'metadata[packagePolicyAccepted]'", 'Unlimited Drinking Water Package — NON-REFUNDABLE']);
+mustNotContain('netlify/functions/create-checkout.mjs', ["form.get('drink_package_policy')", "form.get('water_package_policy')", "form.get('late_stay_policy')"]);
 mustContain('netlify/functions/ticket-view.mjs', ['name="package_policy"', 'I understand this package is non-refundable']);
 mustContain('netlify/functions/create-drink-package-checkout.mjs', ['packagePolicyAccepted', 'FINAL SALE / NON-REFUNDABLE']);
 mustContain('site/assets/js/ticket-view.js', ['name="water_policy"', 'I understand this package is non-refundable']);
