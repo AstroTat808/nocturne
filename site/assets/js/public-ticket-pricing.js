@@ -1,4 +1,16 @@
 (() => {
+  const deadlinePhrases = [
+    '$25 through Sept. 1 · $35 beginning Sept. 2',
+    '$25 through 11:59 PM HST tonight · $35 beginning at midnight',
+    '$25 approved admission ends at 11:59 PM HST tonight. The price becomes $35 at midnight.'
+  ];
+
+  function replaceCurrentPriceText(text, before, current) {
+    if (!text?.includes(before) || current === before) return text;
+    if (deadlinePhrases.some((phrase) => text.includes(phrase))) return text;
+    return text.replaceAll(before, current);
+  }
+
   async function loadPricing() {
     try {
       const response = await fetch('/api/ticket/pricing', { headers: { Accept: 'application/json' }, cache: 'no-store' });
@@ -18,10 +30,10 @@
       });
       const nodes = [];
       while (walker.nextNode()) nodes.push(walker.currentNode);
-      for (const node of nodes) node.nodeValue = node.nodeValue.replaceAll(before, current);
+      for (const node of nodes) node.nodeValue = replaceCurrentPriceText(node.nodeValue, before, current);
 
       for (const meta of document.querySelectorAll('meta[content]')) {
-        if (meta.content.includes(before)) meta.content = meta.content.replaceAll(before, current);
+        meta.content = replaceCurrentPriceText(meta.content, before, current);
       }
 
       const alert = document.querySelector('[data-ticket-price-alert]');
