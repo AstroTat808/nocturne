@@ -16,6 +16,8 @@ const ticketApi = read('netlify/functions/ticket-late-stay.mjs');
 const ticketJs = read('site/assets/js/ticket-view.js');
 const webhook = read('netlify/functions/stripe-webhook.mjs');
 const router = read('netlify/functions/stripe-webhook-router.mjs');
+const lateConfirmed = read('netlify/functions/late-stay-confirmed.mjs');
+const ticketConfirmed = read('netlify/functions/ticket-confirmed.mjs');
 const inviteEmail = read('netlify/functions/_invite-reminder-email.mjs');
 const purchaseEmail = read('netlify/functions/_purchase-reminder-email.mjs');
 const campaign = read('netlify/functions/admin-bulk-drink-package-offer.mjs');
@@ -29,6 +31,8 @@ const envExample = read('.env.example');
 has(helper, 'LATE_STAY_PRICE_CENTS = 2000', 'Late-stay default price must remain $20.');
 has(helper, 'LATE_STAY_CAPACITY = 30', 'Late-stay default capacity must remain 30.');
 has(helper, "LATE_STAY_DEPARTURE = '8:00 AM'", 'Late-stay departure deadline must remain 8:00 AM.');
+has(helper, "LATE_STAY_POLICY_LABEL = 'FINAL SALE / NON-REFUNDABLE'", 'Late-stay policy must be explicitly final sale and non-refundable.');
+has(helper, 'cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash', 'Late-stay policy must define the prohibited refund/transfer remedies.');
 has(helper, "const CAPACITY_STORE = 'nocturne-late-stay-capacity'", 'Late-stay capacity must use its dedicated Blob store.');
 has(helper, '{ onlyIfNew: true }', 'New capacity slot claims must use an atomic onlyIfNew write.');
 has(helper, '{ onlyIfMatch: entry.etag }', 'Existing capacity slot updates must use ETag concurrency protection.');
@@ -36,29 +40,39 @@ has(helper, "status: 'sold'", 'Paid late-stay reservations must become sold slot
 
 has(ticketAccess, 'name="late_stay"', 'Private ticket checkout must expose the late-stay option.');
 has(ticketAccess, 'name="late_stay_policy"', 'Private ticket checkout must require late-stay acknowledgment.');
+has(ticketAccess, 'FINAL SALE / NON-REFUNDABLE', 'Private ticket checkout must display the non-refundable policy.');
 has(ticketAccess, 'spots currently available', 'Private ticket checkout must show live late-stay availability.');
 has(checkout, "'metadata[lateStay]'", 'Initial Stripe checkout must include late-stay metadata.');
 has(checkout, 'lateStay.priceCents', 'Initial checkout total must include the configured late-stay price.');
 has(checkout, 'reserveLateStaySlot', 'Initial ticket checkout must reserve capacity before Stripe payment.');
+has(checkout, 'Late Checkout / Car Camping — NON-REFUNDABLE', 'Bundled Stripe checkout must label late stay as non-refundable.');
 has(addonCheckout, "'metadata[purchaseType]': 'late-stay-addon'", 'Post-ticket Stripe checkout must identify late-stay add-on purchases.');
 has(addonCheckout, 'reserveLateStaySlot', 'Post-ticket checkout must reserve late-stay capacity.');
 has(addonCheckout, 'releaseLateStayReservation', 'Failed post-ticket checkouts must release their capacity reservation.');
+has(addonCheckout, 'Late Checkout / Car Camping — NON-REFUNDABLE', 'Post-ticket Stripe checkout must label late stay as non-refundable.');
 
 has(webhook, 'fulfillBundledLateStay', 'Bundled ticket payments must finalize late-stay entitlement.');
 has(webhook, 'markLateStaySold', 'Bundled payment fulfillment must permanently consume the reserved capacity slot.');
 has(router, "purchaseType === 'late-stay-addon'", 'Webhook router must intercept post-ticket late-stay purchases.');
 has(router, 'reconcileLateStayCheckout', 'Post-ticket webhook must reconcile the paid late-stay entitlement.');
+has(router, 'FINAL SALE / NON-REFUNDABLE', 'Late-stay receipt email must display the non-refundable policy.');
 
 has(ticketApi, 'lateStayAvailability', 'Digital ticket late-stay API must report live capacity.');
 has(ticketApi, 'checkoutPending(summary)', 'Expired late-stay checkout sessions must not trap the ticket in a permanent pending state.');
 has(ticketJs, 'Late Checkout / Car Camping', 'Digital ticket must display the late-stay add-on.');
+has(ticketJs, 'FINAL SALE / NON-REFUNDABLE', 'Digital ticket must display the late-stay non-refundable policy.');
 has(ticketJs, 'LATE STAY · 8AM', 'Staff ticket view must surface the late-stay entitlement.');
+has(lateConfirmed, 'FINAL SALE / NON-REFUNDABLE', 'Standalone late-stay confirmation must show the non-refundable policy.');
+has(ticketConfirmed, 'FINAL SALE / NON-REFUNDABLE', 'Bundled ticket confirmation must show the late-stay non-refundable policy.');
 
 has(inviteEmail, 'Optional Late Checkout / Car Camping · $20', 'Daily invite reminders must mention the late-stay option.');
+has(inviteEmail, 'FINAL SALE / NON-REFUNDABLE', 'Daily invite reminders must mention the late-stay refund policy.');
 has(purchaseEmail, 'Optional Late Checkout / Car Camping · $20', 'Daily purchase reminders must mention the late-stay option.');
-has(campaign, "CAMPAIGN_VERSION='v4'", 'Ticket-holder add-on campaign version must include late stay.');
+has(purchaseEmail, 'FINAL SALE / NON-REFUNDABLE', 'Daily purchase reminders must mention the late-stay refund policy.');
+has(campaign, "CAMPAIGN_VERSION='v5'", 'Ticket-holder add-on campaign version must include the updated late-stay policy.');
 has(campaign, 'offerLateStay', 'Ticket-holder add-on campaign must personalize late-stay eligibility.');
 has(campaign, 'lateStayRemaining', 'Campaign result must report remaining late-stay capacity.');
+has(campaign, 'FINAL SALE / NON-REFUNDABLE', 'Ticket-holder add-on campaign must state the late-stay refund policy.');
 
 has(adminEntitlements, 'lateStayPurchases', 'Admin entitlement endpoint must count late-stay purchases.');
 has(adminEntitlements, 'hasLateStay', 'Admin entitlement endpoint must identify active late-stay guests.');
