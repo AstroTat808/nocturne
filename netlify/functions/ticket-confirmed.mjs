@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { makeTicketToken } from './_ticket-token.mjs';
 import { accessTtlSeconds, makeAccessCookie, makeAccessToken, readTicketAccess, verifyReentryToken } from './_ticket-auth.mjs';
+import { LATE_STAY_POLICY_TEXT } from './_late-stay.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 
@@ -28,7 +29,7 @@ function page({ paid = false, pending = false, ticketId = '', amount = '', digit
       : '<div class="private-access-status"><strong>No paid ticket was found for this session.</strong></div>';
   const packageNotice = paid && drinkPackagePurchased ? '<div class="private-access-status"><strong>Six-Drink Package · FINAL SALE / NON-REFUNDABLE</strong><br>The package portion cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</div>' : '';
   const waterNotice = paid && waterPackagePurchased ? '<div class="private-access-status"><strong>Unlimited Drinking Water · FINAL SALE / NON-REFUNDABLE</strong><br>Unlimited drinking-water service is attached to this ticket for festival operating hours. The package is personal, non-transferable, and non-refundable.</div>' : '';
-  const lateStayNotice = paid && lateStayPurchased ? '<div class="private-access-status"><strong>Late Checkout / Car Camping · Until 8:00 AM</strong><br>You may remain on the property after the 3:00 AM event end until 8:00 AM. This limited-capacity add-on is personal to this ticket and non-transferable.</div>' : '';
+  const lateStayNotice = paid && lateStayPurchased ? `<div class="private-access-status"><strong>Late Checkout / Car Camping · Until 8:00 AM · FINAL SALE / NON-REFUNDABLE</strong><br>You may remain on the property after the 3:00 AM event end until 8:00 AM. ${escapeHtml(LATE_STAY_POLICY_TEXT)}</div>` : '';
   const ticketAction = paid && digitalTicketUrl ? `<a class="btn" href="${escapeHtml(digitalTicketUrl)}">Open Digital Ticket →</a>` : '';
 
   return `<!doctype html>
