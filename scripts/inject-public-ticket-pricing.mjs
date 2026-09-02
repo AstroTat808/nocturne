@@ -52,7 +52,7 @@ for (const relative of files) {
   if (!html.includes('data-ticket-price-alert')) html = html.replace('<main id="main">', `<main id="main">${priceAlert}`);
 
   if (!html.includes('id="optional-addons"')) {
-    html = html.replace(/(<div class="event-facts"[^>]*>[\s\S]*?<\/div>)/, `$1${addOns}`);
+    html = html.replace(/<div class="event-facts"[^>]*>[\s\S]*?<\/div>/, (eventFacts) => `${eventFacts}${addOns}`);
   }
 
   html = replaceFaq(html, 'Are drink or water packages available?');
