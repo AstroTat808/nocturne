@@ -5,6 +5,9 @@ import { writeAudit } from './_audit.mjs';
 export const LATE_STAY_PRICE_CENTS = 2000;
 export const LATE_STAY_CAPACITY = 30;
 export const LATE_STAY_DEPARTURE = '8:00 AM';
+export const LATE_STAY_POLICY_LABEL = 'FINAL SALE / NON-REFUNDABLE';
+export const LATE_STAY_POLICY_TEXT = 'The Late Checkout / Car Camping add-on cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash.';
+export const LATE_STAY_FORFEITURE_TEXT = 'If the associated admission is canceled, refunded, revoked, or otherwise invalidated, the Late Checkout / Car Camping entitlement is forfeited and remains non-refundable.';
 
 const CAPACITY_STORE = 'nocturne-late-stay-capacity';
 
