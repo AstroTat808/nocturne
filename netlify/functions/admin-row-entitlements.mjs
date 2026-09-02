@@ -95,6 +95,8 @@ export default async (req) => {
       const drinkStatus = summary?.drinkPackageStatus || review?.drinkPackageStatus || 'none';
       const waterPurchased = Boolean(summary?.waterPackagePurchased || review?.waterPackagePurchased);
       const waterStatus = summary?.waterPackageStatus || review?.waterPackageStatus || 'none';
+      const lateStayPurchased = Boolean(summary?.lateStayPurchased || review?.lateStayPurchased);
+      const lateStayStatus = summary?.lateStayStatus || review?.lateStayStatus || 'none';
 
       return {
         applicationId: application.id || key,
@@ -108,21 +110,30 @@ export default async (req) => {
         drinkCreditsRemaining: Number(summary?.drinkCreditsRemaining ?? review?.drinkCreditsRemaining ?? 0),
         waterPackagePurchased: waterPurchased,
         waterPackageStatus: waterStatus,
-        hasWaterPackage: activeEntitlement(waterPurchased, waterStatus)
+        hasWaterPackage: activeEntitlement(waterPurchased, waterStatus),
+        lateStayPurchased,
+        lateStayStatus,
+        hasLateStay: activeEntitlement(lateStayPurchased, lateStayStatus),
+        lateStayDepartureTime: summary?.lateStayDepartureTime || review?.lateStayDepartureTime || null,
+        lateStaySlot: summary?.lateStaySlot || review?.lateStaySlot || null
       };
     }))).filter(Boolean);
 
     const summary = entries.reduce((counts, entry) => {
       if (entry.drinkPackagePurchased) counts.drinkPackagePurchases += 1;
       if (entry.waterPackagePurchased) counts.waterPackagePurchases += 1;
+      if (entry.lateStayPurchased) counts.lateStayPurchases += 1;
       if (entry.hasDrinkPackage) counts.activeDrinkPackages += 1;
       if (entry.hasWaterPackage) counts.activeWaterPackages += 1;
+      if (entry.hasLateStay) counts.activeLateStay += 1;
       return counts;
     }, {
       drinkPackagePurchases: 0,
       waterPackagePurchases: 0,
+      lateStayPurchases: 0,
       activeDrinkPackages: 0,
-      activeWaterPackages: 0
+      activeWaterPackages: 0,
+      activeLateStay: 0
     });
 
     return json({ entries, summary });
