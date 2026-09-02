@@ -95,6 +95,11 @@ function entitlements(summary = {}) {
     waterPackage: {
       purchased: Boolean(summary.waterPackagePurchased),
       status: summary.waterPackageStatus || null
+    },
+    lateStay: {
+      purchased: Boolean(summary.lateStayPurchased),
+      status: summary.lateStayStatus || null,
+      departureTime: summary.lateStayDepartureTime || null
     }
   };
 }
