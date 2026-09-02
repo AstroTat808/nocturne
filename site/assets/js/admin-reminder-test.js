@@ -148,6 +148,6 @@
   }).observe(document.documentElement, { childList: true, subtree: true });
 })();
 
-import('/assets/js/admin-ticket-source-stats.js?v=20260826a').catch((error) => {
-  console.warn('NOCTURNE paid/comp ticket stat enhancement unavailable:', error);
+import('/assets/js/admin-ticket-source-stats.js?v=20260901a').catch((error) => {
+  console.warn('NOCTURNE ticket-holder stat enhancement unavailable:', error);
 });
