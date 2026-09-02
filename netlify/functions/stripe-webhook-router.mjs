@@ -3,7 +3,7 @@ import stripeWebhook from './stripe-webhook.mjs';
 import { verifyStripeSignature } from './_stripe-signature.mjs';
 import { makeTicketToken } from './_ticket-token.mjs';
 import { writeAudit } from './_audit.mjs';
-import { reconcileLateStayCheckout } from './_late-stay.mjs';
+import { LATE_STAY_POLICY_TEXT, reconcileLateStayCheckout } from './_late-stay.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -89,17 +89,18 @@ async function fulfillAndSendLateStayReceipt(session) {
   const currency = String(session.currency || checkoutOrder.currency || 'usd').toUpperCase();
   const displayName = application.preferredName || application.fullName || 'Guest';
   const digitalTicketUrl = ticketLink(submissionId, ticketId);
+  const policy = `FINAL SALE / NON-REFUNDABLE: ${LATE_STAY_POLICY_TEXT}`;
   const text = [
     `${displayName},`, '', 'Your NOCTURNE Late Checkout / Car Camping add-on is confirmed.', '',
     `Ticket ID: ${ticketId}`, `Amount: ${currency} ${amount.toFixed(2)}`, 'Departure deadline: 8:00 AM',
     digitalTicketUrl ? `Open your updated digital ticket: ${digitalTicketUrl}` : '', '',
     'You may remain on the NOCTURNE property after the 3:00 AM event end until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff.',
     'Each person remaining on the property after 3:00 AM must have this add-on attached to their own ticket.', '',
-    'FINAL SALE / NON-TRANSFERABLE: This limited-capacity add-on is attached to one registered ticket holder and cannot be transferred to another guest.', '',
+    policy, '',
     `Need help? ${HELP_EMAIL}`, '', 'NOCTURNE Festival', 'Presented by Wild Ones · Hawai‘i'
   ].filter(Boolean).join('\n');
   const button = digitalTicketUrl ? `<p style="text-align:center;margin:30px 0"><a href="${escapeHtml(digitalTicketUrl)}" style="display:inline-block;padding:14px 20px;background:#d89a2b;color:#0b0803;text-decoration:none;font-size:12px;letter-spacing:2px;text-transform:uppercase">Open Updated Ticket</a></p>` : '';
-  const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Late Stay Confirmed</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:40px;line-height:1.05;color:#fff3df">Stay until<br>8:00 AM.</h1><p style="color:#c8baa4;line-height:1.7">${escapeHtml(displayName)}, Late Checkout / Car Camping is now attached to your NOCTURNE ticket.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.8"><strong>Ticket ID:</strong> ${escapeHtml(ticketId)}<br><strong>Amount:</strong> ${escapeHtml(currency)} ${amount.toFixed(2)}<br><strong>Departure deadline:</strong> 8:00 AM</div>${button}<p style="color:#9d907f;line-height:1.7">You may remain on the property after the 3:00 AM event end until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff. Each person staying after 3:00 AM must have this entitlement on their own ticket.</p><p style="color:#ffca61;font-size:12px;line-height:1.7"><strong>FINAL SALE / NON-TRANSFERABLE:</strong> This limited-capacity add-on is attached to one registered ticket holder.</p><p style="color:#807564;font-size:12px">Need help? ${escapeHtml(HELP_EMAIL)}</p></div></div></body></html>`;
+  const html = `<!doctype html><html><body style="margin:0;background:#030303;color:#f7efe3;font-family:Arial,sans-serif"><div style="max-width:640px;margin:0 auto;padding:44px 24px"><div style="border:1px solid rgba(216,154,43,.35);background:#080604;padding:38px 30px"><div style="color:#d89a2b;font-size:11px;letter-spacing:3px;text-transform:uppercase">NOCTURNE · Late Stay Confirmed</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:40px;line-height:1.05;color:#fff3df">Stay until<br>8:00 AM.</h1><p style="color:#c8baa4;line-height:1.7">${escapeHtml(displayName)}, Late Checkout / Car Camping is now attached to your NOCTURNE ticket.</p><div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.8"><strong>Ticket ID:</strong> ${escapeHtml(ticketId)}<br><strong>Amount:</strong> ${escapeHtml(currency)} ${amount.toFixed(2)}<br><strong>Departure deadline:</strong> 8:00 AM</div>${button}<p style="color:#9d907f;line-height:1.7">You may remain on the property after the 3:00 AM event end until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff. Each person staying after 3:00 AM must have this entitlement on their own ticket.</p><p style="color:#ffca61;font-size:12px;line-height:1.7"><strong>FINAL SALE / NON-REFUNDABLE:</strong> ${escapeHtml(LATE_STAY_POLICY_TEXT)}</p><p style="color:#807564;font-size:12px">Need help? ${escapeHtml(HELP_EMAIL)}</p></div></div></body></html>`;
 
   try {
     const response = await fetch('https://api.resend.com/emails', {
