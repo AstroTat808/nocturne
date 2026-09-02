@@ -5,6 +5,7 @@ import { writeAudit } from './_audit.mjs';
 import { drinkPackageConfig, drinkPackageRequested } from './_drink-package.mjs';
 import { waterPackageConfig } from './_water-package.mjs';
 import { lateStayAvailability, lateStayConfig, LATE_STAY_POLICY_TEXT, releaseLateStayReservation, reserveLateStaySlot } from './_late-stay.mjs';
+import { ticketPricing } from './_ticket-pricing.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -16,7 +17,7 @@ function json(data, status = 200) {
 function redirect(location) { return new Response(null, { status: 303, headers: { Location: location, 'Cache-Control': 'no-store' } }); }
 function browserFormPost(req) { return (req.headers.get('content-type') || '').toLowerCase().includes('application/x-www-form-urlencoded'); }
 function fail(req, message, status) { return browserFormPost(req) ? redirect(`/ticket-access?checkout_error=${encodeURIComponent(message)}`) : json({ error: message }, status); }
-function checkoutConfigured() { const price = Number(process.env.NOCTURNE_TICKET_PRICE_CENTS || 0); return Boolean(process.env.STRIPE_SECRET_KEY && Number.isInteger(price) && price >= 50); }
+function checkoutConfigured() { const price = ticketPricing().priceCents; return Boolean(process.env.STRIPE_SECRET_KEY && Number.isInteger(price) && price >= 50); }
 function siteUrl(req) { return (process.env.NOCTURNE_SITE_URL || new URL(req.url).origin).replace(/\/$/, ''); }
 function requested(value) { return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase()); }
 
@@ -27,8 +28,9 @@ async function stripeRequest(path, body, idempotencyKey = '') {
   return data;
 }
 
-function checkoutStillOpen(summary, includeDrinkPackage, includeWaterPackage, includeLateStay) {
+function checkoutStillOpen(summary, includeDrinkPackage, includeWaterPackage, includeLateStay, ticketAmount) {
   if (summary?.status !== 'checkout_created' || !summary.checkoutUrl) return false;
+  if (Number(summary.ticketAmount || 0) !== Number(ticketAmount || 0)) return false;
   if (Boolean(summary.drinkPackageRequested) !== includeDrinkPackage) return false;
   if (Boolean(summary.waterPackageRequested) !== includeWaterPackage) return false;
   if (Boolean(summary.lateStayRequested) !== includeLateStay) return false;
@@ -89,6 +91,8 @@ export default async (req) => {
   const packageConfig = drinkPackageConfig();
   const waterConfig = waterPackageConfig();
   const lateStay = lateStayConfig();
+  const pricing = ticketPricing();
+  const unitAmount = pricing.priceCents;
   const includeDrinkPackage = packageConfig.enabled && input.drinkPackage;
   const includeWaterPackage = waterConfig.enabled && input.waterPackage;
   const includeLateStay = lateStay.enabled && input.lateStay;
@@ -110,7 +114,7 @@ export default async (req) => {
   const existingEntry = await orderStore.getWithMetadata(summaryKey, { type: 'json', consistency: 'strong' });
   const existing = existingEntry?.data || null;
   if (blockedTicketStates.has(String(existing?.status || '').toLowerCase())) return fail(req, 'This invitation already has a protected ticket or payment record.', 409);
-  if (checkoutStillOpen(existing, includeDrinkPackage, includeWaterPackage, includeLateStay)) return browserFormPost(req) ? redirect(existing.checkoutUrl) : json({ ok: true, checkoutUrl: existing.checkoutUrl, reused: true });
+  if (checkoutStillOpen(existing, includeDrinkPackage, includeWaterPackage, includeLateStay, unitAmount)) return browserFormPost(req) ? redirect(existing.checkoutUrl) : json({ ok: true, checkoutUrl: existing.checkoutUrl, reused: true });
 
   if (includeLateStay) {
     const availability = await lateStayAvailability();
@@ -120,7 +124,7 @@ export default async (req) => {
     }
   }
 
-  const selectionKey = ['ticket', includeDrinkPackage ? 'six-drink' : '', includeWaterPackage ? 'water' : '', includeLateStay ? 'late-stay' : ''].filter(Boolean).join('+');
+  const selectionKey = ['ticket', `price-${unitAmount}`, includeDrinkPackage ? 'six-drink' : '', includeWaterPackage ? 'water' : '', includeLateStay ? 'late-stay' : ''].filter(Boolean).join('+');
   const claim = await claimCheckoutAttempt(orderStore, submissionId, selectionKey);
   if (!claim) return fail(req, 'Your checkout is already being prepared. Please wait a moment and try again.', 409);
 
@@ -135,7 +139,6 @@ export default async (req) => {
     }
   }
 
-  const unitAmount = Number(process.env.NOCTURNE_TICKET_PRICE_CENTS);
   const currency = String(process.env.NOCTURNE_TICKET_CURRENCY || 'usd').toLowerCase();
   const productName = String(process.env.NOCTURNE_TICKET_NAME || 'NOCTURNE Festival — General Admission').slice(0, 120);
   const baseUrl = siteUrl(req);
@@ -148,16 +151,21 @@ export default async (req) => {
   const params = {
     mode: 'payment', success_url: `${baseUrl}/ticket-confirmed?session_id={CHECKOUT_SESSION_ID}&return_token=${encodeURIComponent(returnToken)}`, cancel_url: `${baseUrl}/ticket-access?checkout=cancelled`, client_reference_id: submissionId,
     'metadata[submissionId]': submissionId, 'metadata[event]': 'NOCTURNE',
+    'metadata[ticketAmount]': String(unitAmount), 'metadata[ticketPriceTier]': pricing.changed ? '35' : '25', 'metadata[ticketPriceChangeAt]': pricing.changeAt,
     'metadata[drinkPackage]': includeDrinkPackage ? 'six-credit' : 'none', 'metadata[drinkCredits]': includeDrinkPackage ? String(packageConfig.credits) : '0', 'metadata[drinkPackagePolicyAccepted]': includeDrinkPackage ? 'true' : 'false',
     'metadata[waterPackage]': includeWaterPackage ? 'unlimited' : 'none', 'metadata[waterPackagePolicyAccepted]': includeWaterPackage ? 'true' : 'false',
     'metadata[lateStay]': includeLateStay ? 'until-8am' : 'none', 'metadata[lateStayPolicyAccepted]': includeLateStay ? 'true' : 'false',
     'metadata[lateStaySlot]': includeLateStay ? String(lateStayReservation.slot) : '', 'metadata[lateStayReservationId]': includeLateStay ? lateStayReservation.reservationId : '',
     'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': currency, 'line_items[0][price_data][unit_amount]': String(unitAmount), 'line_items[0][price_data][product_data][name]': productName,
-    'payment_intent_data[metadata][submissionId]': submissionId, 'payment_intent_data[metadata][event]': 'NOCTURNE',
+    'payment_intent_data[metadata][submissionId]': submissionId, 'payment_intent_data[metadata][event]': 'NOCTURNE', 'payment_intent_data[metadata][ticketAmount]': String(unitAmount), 'payment_intent_data[metadata][ticketPriceTier]': pricing.changed ? '35' : '25',
     'payment_intent_data[metadata][drinkPackage]': includeDrinkPackage ? 'six-credit' : 'none', 'payment_intent_data[metadata][drinkPackagePolicyAccepted]': includeDrinkPackage ? 'true' : 'false',
     'payment_intent_data[metadata][waterPackage]': includeWaterPackage ? 'unlimited' : 'none', 'payment_intent_data[metadata][waterPackagePolicyAccepted]': includeWaterPackage ? 'true' : 'false',
     'payment_intent_data[metadata][lateStay]': includeLateStay ? 'until-8am' : 'none', 'payment_intent_data[metadata][lateStaySlot]': includeLateStay ? String(lateStayReservation.slot) : ''
   };
+  const secondsUntilPriceChange = Math.floor((pricing.changeAtEpochMs - Date.now()) / 1000);
+  if (!pricing.changed && secondsUntilPriceChange >= 30 * 60 && (!stripeExpiresAt || Math.floor(pricing.changeAtEpochMs / 1000) < stripeExpiresAt)) {
+    stripeExpiresAt = Math.floor(pricing.changeAtEpochMs / 1000);
+  }
   if (stripeExpiresAt) params.expires_at = String(stripeExpiresAt);
   let lineIndex = 1;
   if (includeDrinkPackage) {
@@ -193,6 +201,7 @@ export default async (req) => {
     const checkoutExpiresAt = session.expires_at ? new Date(Number(session.expires_at) * 1000).toISOString() : null;
     const record = {
       stripeCheckoutSessionId: session.id, submissionId, status: 'checkout_created', amountTotal: expectedAmountTotal, ticketAmount: unitAmount,
+      ticketPriceTier: pricing.changed ? '35' : '25', ticketPriceChangeAt: pricing.changeAt,
       drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, drinkPackagePriceCents: includeDrinkPackage ? packageConfig.priceCents : 0, drinkCreditsPurchased: includeDrinkPackage ? packageConfig.credits : 0,
       waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, waterPackagePriceCents: includeWaterPackage ? waterConfig.priceCents : 0,
       lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayPriceCents: includeLateStay ? lateStay.priceCents : 0,
@@ -208,12 +217,12 @@ export default async (req) => {
       throw new Error('Ticket eligibility changed while checkout was being prepared.');
     }
     await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'completed', stripeCheckoutSessionId: session.id, checkoutExpiresAt, lateStaySlot: lateStayReservation?.slot || null, lateStayReservationId: lateStayReservation?.reservationId || null, updatedAt: createdAt });
-    await writeAudit('checkout.created', { submissionId, stripeCheckoutSessionId: session.id, drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayFinalSaleNonRefundable: includeLateStay ? true : null, lateStaySlot: lateStayReservation?.slot || null, expectedAmountTotal });
-    return browserFormPost(req) ? redirect(session.url) : json({ ok: true, checkoutUrl: session.url });
+    await writeAudit('checkout.created', { submissionId, stripeCheckoutSessionId: session.id, ticketAmount: unitAmount, ticketPriceTier: pricing.changed ? '35' : '25', ticketPriceChangeAt: pricing.changeAt, drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayFinalSaleNonRefundable: includeLateStay ? true : null, lateStaySlot: lateStayReservation?.slot || null, expectedAmountTotal });
+    return browserFormPost(req) ? redirect(session.url) : json({ ok: true, checkoutUrl: session.url, ticketAmount: unitAmount, ticketPriceTier: pricing.changed ? '35' : '25' });
   } catch (error) {
     if (lateStayReservation) await releaseLateStayReservation({ slot: lateStayReservation.slot, reservationId: lateStayReservation.reservationId, reason: 'ticket_checkout_failed' }).catch(() => {});
     await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'failed', error: String(error?.message || error).slice(0, 500), updatedAt: new Date().toISOString() }).catch(() => {});
-    await writeAudit('checkout.failed', { submissionId, error: String(error?.message || error) });
+    await writeAudit('checkout.failed', { submissionId, ticketAmount: unitAmount, error: String(error?.message || error) });
     console.error('NOCTURNE Stripe checkout creation failed:', error);
     return fail(req, 'Ticket checkout could not be started. Please try again.', 502);
   }
