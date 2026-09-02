@@ -69,10 +69,13 @@ check(!/\bbeer\b|\bcocktails?\b|\bpremium cocktails?\b|\bpaid at the bar\b/i.tes
 has(publicInjector, 'html.replace(/<div class="event-facts"', 'Public add-ons must be injected adjacent to the event facts.');
 has(publicInjector, '(eventFacts) => `${eventFacts}${addOns}`', 'Public add-on injection must use a function replacement so $15/$20/$55 remain literal prices.');
 check(!publicInjector.includes('`$1${addOns}`'), 'Public add-on injection must never use a replacement string where $15 can be parsed as a capture reference.');
+has(publicInjector, 'html.replace(/<\\/header>\\s*<main id="main">/', 'Public price alert must be injected after the fixed site header, not inside the header overlay area.');
 has(publicPricing, 'data-ticket-price-transition', 'Public runtime pricing must preserve explicit price-transition messages after the cutoff.');
 has(publicPricing, 'data-ticket-current-price', 'Public runtime pricing must update the current-price field independently.');
 has(publicPricing, "alert.querySelector('strong').textContent = 'Current ticket price'", 'Public price alert must become current-price messaging after the cutoff.');
 has(publicOffersCss, '.ticket-price-alert', 'Public price alert must have dedicated styling.');
+has(publicOffersCss, 'margin-top:82px', 'Desktop price alert must clear the fixed 82px site header.');
+has(publicOffersCss, 'margin-top:68px', 'Mobile price alert must clear the fixed 68px site header.');
 has(publicOffersCss, '.ticket-price-change-note', 'Public ticket card cutoff note must have dedicated emphasis styling.');
 has(publicOffersCss, '.public-addon-grid', 'Public add-on section must have responsive card styling.');
 
