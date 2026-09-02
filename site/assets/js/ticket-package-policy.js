@@ -1,7 +1,8 @@
 (() => {
   const pairs = [
     ['drink_package', 'drink_package_policy'],
-    ['water_package', 'water_package_policy']
+    ['water_package', 'water_package_policy'],
+    ['late_stay', 'late_stay_policy']
   ];
 
   for (const [packageName, policyName] of pairs) {
