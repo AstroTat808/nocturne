@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const scriptTag = '<script src="/assets/js/public-ticket-pricing.js?v=20260901c" defer></script>';
-const styleTag = '<link rel="stylesheet" href="/assets/css/public-offers.css?v=20260901a">';
+const styleTag = '<link rel="stylesheet" href="/assets/css/public-offers.css?v=20260901b">';
 const files = ['site/index.html', 'site/festival.html'];
 
 const transitionText = '<span data-ticket-price-transition>$25 through September 1 · $35 starting at 12:00 AM HST September 2</span>';
@@ -45,7 +45,7 @@ function applyVisiblePriceMessaging(html) {
     ['<span>$25 if approved</span>', `<span>${transitionShort}</span>`],
     ['Approved applicants receive access to purchase a $25 ticket, subject to availability.', `Approved applicants receive access to purchase admission at ${transitionText}, subject to availability.`],
     ['<article class="event-fact"><small>Ticket</small><strong>$25</strong><p>Available only after your invitation request is approved.</p></article>', `<article class="event-fact"><small>Ticket</small><strong data-ticket-current-price>$25</strong><p><strong class="ticket-price-change-note">$35 starting at 12:00 AM HST September 2.</strong><br>Available only after your invitation request is approved.</p></article>`],
-    ['<article class="event-fact"><small>Ticket</small><strong>$25</strong><p>Private checkout becomes available after an invitation request is approved.</p></article>', `<article class="event-fact"><small>Ticket</small><strong data-ticket-current-price>$25</strong><p><strong class="ticket-price-change-note">$35 starting at 12:00 AM HST September 2.</strong><br>Private checkout becomes available after an invitation request is approved.</p></article>`],
+    ['<article class="event-fact"><small>Ticket</small><strong>$25</strong><p>Private checkout becomes available after an invitation request is approved.</p></article>', `<article class="event-fact"><small>Ticket</small><strong data-ticket-current-price>$25</strong><p><strong class="ticket-price-change-note">$35 starting at 12:00 AM HST September 2.</strong><br>Private checkout becomes available after your invitation request is approved.</p></article>`],
     ['$25 APPROVED ACCESS', '$25 THROUGH SEPT 1 · $35 STARTING MIDNIGHT SEPT 2'],
     ['Tickets are $25 and are not offered through an open public sale.', `Tickets are ${transitionText} and are not offered through an open public sale.`],
     ['Redeem your invitation to unlock the private $25 ticket checkout.', `Redeem your invitation to unlock private ticket checkout: ${transitionText}.`],
@@ -77,7 +77,9 @@ for (const relative of files) {
 
   html = applyVisiblePriceMessaging(html);
 
-  if (!html.includes('data-ticket-price-alert')) html = html.replace('<main id="main">', `<main id="main">${priceAlert}`);
+  if (!html.includes('data-ticket-price-alert')) {
+    html = html.replace(/<\/header>\s*<main id="main">/, () => `</header>${priceAlert}\n  <main id="main">`);
+  }
 
   if (!html.includes('id="optional-addons"')) {
     html = html.replace(/<div class="event-facts"[^>]*>[\s\S]*?<\/div>/, (eventFacts) => `${eventFacts}${addOns}`);
