@@ -130,6 +130,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/ticket/pricing"
+  to = "/.netlify/functions/ticket-pricing"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/ticket/water"
   to = "/.netlify/functions/ticket-water"
   status = 200
