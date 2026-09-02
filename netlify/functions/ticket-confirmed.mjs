@@ -13,7 +13,7 @@ function escapeHtml(value = '') {
     .replaceAll("'", '&#039;');
 }
 
-function page({ paid = false, pending = false, ticketId = '', amount = '', digitalTicketUrl = '', message = '', drinkPackagePurchased = false, waterPackagePurchased = false } = {}) {
+function page({ paid = false, pending = false, ticketId = '', amount = '', digitalTicketUrl = '', message = '', drinkPackagePurchased = false, waterPackagePurchased = false, lateStayPurchased = false } = {}) {
   const heading = paid ? 'Your ticket is confirmed.' : pending ? 'Payment received.' : 'We could not confirm that ticket.';
   const kicker = paid ? 'Ticket Confirmed' : pending ? 'Finalizing Purchase' : 'Ticket Status';
   const detail = paid
@@ -28,12 +28,13 @@ function page({ paid = false, pending = false, ticketId = '', amount = '', digit
       : '<div class="private-access-status"><strong>No paid ticket was found for this session.</strong></div>';
   const packageNotice = paid && drinkPackagePurchased ? '<div class="private-access-status"><strong>Six-Drink Package · FINAL SALE / NON-REFUNDABLE</strong><br>The package portion cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</div>' : '';
   const waterNotice = paid && waterPackagePurchased ? '<div class="private-access-status"><strong>Unlimited Drinking Water · FINAL SALE / NON-REFUNDABLE</strong><br>Unlimited drinking-water service is attached to this ticket for festival operating hours. The package is personal, non-transferable, and non-refundable.</div>' : '';
+  const lateStayNotice = paid && lateStayPurchased ? '<div class="private-access-status"><strong>Late Checkout / Car Camping · Until 8:00 AM</strong><br>You may remain on the property after the 3:00 AM event end until 8:00 AM. This limited-capacity add-on is personal to this ticket and non-transferable.</div>' : '';
   const ticketAction = paid && digitalTicketUrl ? `<a class="btn" href="${escapeHtml(digitalTicketUrl)}">Open Digital Ticket →</a>` : '';
 
   return `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#030303"><meta name="robots" content="noindex,nofollow,noarchive"><title>${escapeHtml(kicker)} | NOCTURNE</title><link rel="icon" href="/assets/images/favicon.png"><link rel="stylesheet" href="/assets/css/styles.css"><link rel="stylesheet" href="/assets/css/private-access.css"></head>
-<body class="private-access-page"><main class="private-access-shell"><section class="private-access-card" aria-labelledby="ticket-title"><div class="private-access-logo-wrap"><img class="private-access-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768"></div><p class="section-kicker">${escapeHtml(kicker)}</p><h1 id="ticket-title">${escapeHtml(heading)}</h1><p>${detail}</p>${status}${packageNotice}${waterNotice}<p>${paid ? 'Your digital ticket contains the unique QR code you will present at event check-in.' : 'Do not submit another payment unless this page continues to show an error after Stripe has finished processing.'}</p><div class="private-access-actions">${ticketAction}<a class="btn secondary" href="/">Return to NOCTURNE</a></div></section></main></body></html>`;
+<body class="private-access-page"><main class="private-access-shell"><section class="private-access-card" aria-labelledby="ticket-title"><div class="private-access-logo-wrap"><img class="private-access-logo" src="/assets/images/nocturne-logo.webp" alt="NOCTURNE Festival — presented by Wild Ones" width="1536" height="768"></div><p class="section-kicker">${escapeHtml(kicker)}</p><h1 id="ticket-title">${escapeHtml(heading)}</h1><p>${detail}</p>${status}${packageNotice}${waterNotice}${lateStayNotice}<p>${paid ? 'Your digital ticket contains the unique QR code you will present at event check-in.' : 'Do not submit another payment unless this page continues to show an error after Stripe has finished processing.'}</p><div class="private-access-actions">${ticketAction}<a class="btn secondary" href="/">Return to NOCTURNE</a></div></section></main></body></html>`;
 }
 
 function htmlResponse(html, status = 200, extraHeaders = {}) {
@@ -85,7 +86,8 @@ export default async (req) => {
       amount,
       digitalTicketUrl,
       drinkPackagePurchased: Boolean(order.drinkPackageRequested || order.drinkPackagePurchased),
-      waterPackagePurchased: Boolean(order.waterPackageRequested || order.waterPackagePurchased)
+      waterPackagePurchased: Boolean(order.waterPackageRequested || order.waterPackagePurchased),
+      lateStayPurchased: Boolean(order.lateStayPurchased || order.lateStayRequested)
     });
   } else { html = page({ pending: true }); status = 202; }
 
