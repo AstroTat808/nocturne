@@ -39,7 +39,8 @@ has(helper, '{ onlyIfMatch: entry.etag }', 'Existing capacity slot updates must 
 has(helper, "status: 'sold'", 'Paid late-stay reservations must become sold slots.');
 
 has(ticketAccess, 'name="late_stay"', 'Private ticket checkout must expose the late-stay option.');
-has(ticketAccess, 'name="late_stay_policy"', 'Private ticket checkout must require late-stay acknowledgment.');
+has(ticketAccess, 'name="package_policy"', 'Private ticket checkout must include the shared add-on acknowledgment.');
+has(ticketAccess, 'all selected add-ons are FINAL SALE / NON-REFUNDABLE', 'Shared acknowledgment must cover selected late-stay and package add-ons.');
 has(ticketAccess, 'FINAL SALE / NON-REFUNDABLE', 'Private ticket checkout must display the non-refundable policy.');
 has(ticketAccess, 'spots currently available', 'Private ticket checkout must show live late-stay availability.');
 has(checkout, "'metadata[lateStay]'", 'Initial Stripe checkout must include late-stay metadata.');
