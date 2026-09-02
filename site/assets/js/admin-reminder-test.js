@@ -105,7 +105,7 @@
     panel.innerHTML = `
       <div>
         <strong>Ticket-holder add-on campaign</strong>
-        <p class="admin-muted">Email current paid or checked-in ticket holders about add-ons they do not already have: the $55 Six-Drink Package and/or the $15 Unlimited Drinking Water Package. Guests who already have both are skipped.</p>
+        <p class="admin-muted">Email current paid or checked-in ticket holders about eligible add-ons they do not already have: the $55 Six-Drink Package, $15 Unlimited Drinking Water, and $20 Late Checkout / Car Camping while its 30-person capacity remains available.</p>
       </div>
       <div>
         <button id="admin-send-bulk-drink-offer" class="admin-outline-button" type="button">Email Ticket Add-On Offer →</button>
@@ -116,7 +116,7 @@
     const button = panel.querySelector('#admin-send-bulk-drink-offer');
     const result = panel.querySelector('#admin-send-bulk-drink-offer-status');
     button.addEventListener('click', async () => {
-      if (!window.confirm('Email NOCTURNE ticket holders now about any available Six-Drink and Unlimited Water add-ons they do not already have? Guests already sent this expanded campaign today will be skipped.')) return;
+      if (!window.confirm('Email NOCTURNE ticket holders now about any eligible Six-Drink, Unlimited Water, and Late Checkout / Car Camping add-ons they do not already have? Guests already sent this campaign today will be skipped.')) return;
       button.disabled = true;
       result.classList.remove('error');
       result.textContent = 'Finding eligible ticket holders and sending add-on offers…';
@@ -129,7 +129,8 @@
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'The ticket add-on campaign could not be completed.');
-        result.textContent = `Sent ${Number(data.sent || 0)} offer${Number(data.sent || 0) === 1 ? '' : 's'} · ${Number(data.bothOffers || 0)} both packages · ${Number(data.drinkOnly || 0)} drink only · ${Number(data.waterOnly || 0)} water only · ${Number(data.duplicate || 0)} already sent today · ${Number(data.ineligible || 0)} not eligible · ${Number(data.failed || 0)} failed`;
+        const lateCapacity = data.lateStaySoldOut ? 'late stay sold out' : `${Number(data.lateStayRemaining || 0)} late-stay spots remaining`;
+        result.textContent = `Sent ${Number(data.sent || 0)} offer${Number(data.sent || 0) === 1 ? '' : 's'} · ${Number(data.multiOffers || 0)} multiple add-ons · ${Number(data.drinkOnly || 0)} drink only · ${Number(data.waterOnly || 0)} water only · ${Number(data.lateStayOnly || 0)} late stay only · ${lateCapacity} · ${Number(data.duplicate || 0)} already sent today · ${Number(data.ineligible || 0)} not eligible · ${Number(data.failed || 0)} failed`;
         if (Number(data.failed || 0) > 0) result.classList.add('error');
       } catch (error) {
         result.textContent = error.message || 'The ticket add-on campaign could not be completed.';
