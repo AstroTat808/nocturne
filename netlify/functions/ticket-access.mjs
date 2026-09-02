@@ -2,7 +2,7 @@ import { getStore } from '@netlify/blobs';
 import { readTicketAccess } from './_ticket-auth.mjs';
 import { drinkPackageConfig } from './_drink-package.mjs';
 import { waterPackageConfig } from './_water-package.mjs';
-import { lateStayAvailability, lateStayConfig } from './_late-stay.mjs';
+import { lateStayAvailability, lateStayConfig, LATE_STAY_POLICY_TEXT } from './_late-stay.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 
@@ -65,7 +65,7 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
     const lateStayConfigValue = lateStayConfig();
     const lateStayRemaining = Number(lateStay?.remaining ?? lateStayConfigValue.capacity);
     const lateStaySoldOut = Boolean(lateStay?.soldOut);
-    const lateStayOption = lateStayConfigValue.enabled ? `<label class="drink-package-option"${lateStaySoldOut ? ' style="opacity:.62"' : ''}><input type="checkbox" name="late_stay" value="yes" ${lateStaySoldOut ? 'disabled' : ''}><span><strong>${lateStaySoldOut ? 'SOLD OUT — ' : ''}Add Late Checkout / Car Camping · ${formattedLateStayPrice()}</strong><small>Stay on the property after NOCTURNE ends at 3:00 AM until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff. Each person staying after 3:00 AM needs their own add-on.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>LIMITED CAPACITY:</strong> ${lateStaySoldOut ? 'All 30 spots are currently claimed.' : `${lateStayRemaining} of ${lateStayConfigValue.capacity} spots currently available.`} Final sale and non-transferable.</small></span></label>${lateStaySoldOut ? '' : '<label class="drink-package-option"><input type="checkbox" name="late_stay_policy" value="yes" disabled><span><strong>I understand this is a limited-capacity, final-sale add-on for one ticket holder.</strong><small>This acknowledgment is required when Late Checkout / Car Camping is selected.</small></span></label>'}` : '';
+    const lateStayOption = lateStayConfigValue.enabled ? `<label class="drink-package-option"${lateStaySoldOut ? ' style="opacity:.62"' : ''}><input type="checkbox" name="late_stay" value="yes" ${lateStaySoldOut ? 'disabled' : ''}><span><strong>${lateStaySoldOut ? 'SOLD OUT — ' : ''}Add Late Checkout / Car Camping · ${formattedLateStayPrice()}</strong><small>Stay on the property after NOCTURNE ends at 3:00 AM until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff. Each person staying after 3:00 AM needs their own add-on.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> ${escapeHtml(LATE_STAY_POLICY_TEXT)}</small><small style="display:block;margin-top:.4rem;color:#9d907f"><strong>LIMITED CAPACITY:</strong> ${lateStaySoldOut ? 'All 30 spots are currently claimed.' : `${lateStayRemaining} of ${lateStayConfigValue.capacity} spots currently available.`}</small></span></label>${lateStaySoldOut ? '' : '<label class="drink-package-option"><input type="checkbox" name="late_stay_policy" value="yes" disabled><span><strong>I understand Late Checkout / Car Camping is FINAL SALE / NON-REFUNDABLE.</strong><small>This acknowledgment is required when Late Checkout / Car Camping is selected.</small></span></label>'}` : '';
     actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-checkout">${packageOption}${waterOption}${lateStayOption}<div class="private-access-actions"><button class="btn" type="submit">Continue to Checkout →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></div></form>`;
   } else {
     lead = 'Your invitation was successfully redeemed. The private ticket checkout is not live yet, so there is nothing else you need to do right now.';
@@ -117,7 +117,7 @@ export default async (req) => {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
-        'X-Robots-Tag': 'noindex, nofollow, noarchive'
+        'X-Robots-Tag': 'noindex, nofollow,noarchive'
       }
     });
   }
