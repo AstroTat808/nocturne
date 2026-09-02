@@ -102,6 +102,8 @@ function hasTicketActivity(review, summary) {
     || review?.drinkPackageRefundId
     || review?.waterPackageCheckoutSessionId
     || review?.waterPackagePaymentIntentId
+    || review?.lateStayCheckoutSessionId
+    || review?.lateStayPaymentIntentId
     || summary?.ticketId
     || summary?.stripeCheckoutSessionId
     || summary?.stripePaymentIntentId
@@ -111,6 +113,8 @@ function hasTicketActivity(review, summary) {
     || summary?.drinkPackageRefundId
     || summary?.waterPackageCheckoutSessionId
     || summary?.waterPackagePaymentIntentId
+    || summary?.lateStayCheckoutSessionId
+    || summary?.lateStayPaymentIntentId
     || summary?.checkedInAt
     || summary?.paidAt
     || summary?.refundedAt
@@ -131,6 +135,8 @@ function hasStripeActivity(review, summary) {
     || review?.drinkPackageRefundId
     || review?.waterPackageCheckoutSessionId
     || review?.waterPackagePaymentIntentId
+    || review?.lateStayCheckoutSessionId
+    || review?.lateStayPaymentIntentId
     || summary?.stripeCheckoutSessionId
     || summary?.stripePaymentIntentId
     || summary?.stripeRefundId
@@ -139,6 +145,8 @@ function hasStripeActivity(review, summary) {
     || summary?.drinkPackageRefundId
     || summary?.waterPackageCheckoutSessionId
     || summary?.waterPackagePaymentIntentId
+    || summary?.lateStayCheckoutSessionId
+    || summary?.lateStayPaymentIntentId
   );
 }
 
@@ -168,6 +176,7 @@ function financialTombstone(record, submissionId, revokedAt) {
   if (!record) return null;
   const drinkPurchased = Boolean(record.drinkPackagePurchased || record.drinkPackageRequested);
   const waterPurchased = Boolean(record.waterPackagePurchased || record.waterPackageRequested);
+  const lateStayPurchased = Boolean(record.lateStayPurchased || record.lateStayRequested);
   return {
     submissionId,
     status: 'revoked',
@@ -208,7 +217,18 @@ function financialTombstone(record, submissionId, revokedAt) {
     waterPackagePaymentIntentId: record.waterPackagePaymentIntentId || null,
     waterPackagePaidAt: record.waterPackagePaidAt || null,
     waterPackageInvalidatedAt: waterPurchased ? revokedAt : null,
-    waterPackageInvalidationReason: waterPurchased ? 'admin_force_delete' : null
+    waterPackageInvalidationReason: waterPurchased ? 'admin_force_delete' : null,
+    lateStayPurchased,
+    lateStayStatus: lateStayPurchased ? 'revoked' : 'none',
+    lateStayPriceCents: Number(record.lateStayPriceCents || 0),
+    lateStayPurchaseType: record.lateStayPurchaseType || null,
+    lateStayCheckoutSessionId: record.lateStayCheckoutSessionId || null,
+    lateStayPaymentIntentId: record.lateStayPaymentIntentId || null,
+    lateStayPaidAt: record.lateStayPaidAt || null,
+    lateStaySlot: record.lateStaySlot || null,
+    lateStayDepartureTime: record.lateStayDepartureTime || null,
+    lateStayInvalidatedAt: lateStayPurchased ? revokedAt : null,
+    lateStayInvalidationReason: lateStayPurchased ? 'admin_force_delete' : null
   };
 }
 
@@ -226,9 +246,11 @@ async function forceRevokeAndDelete({ applicationStore, reviewStore, inviteStore
     summary?.stripeCheckoutSessionId,
     summary?.drinkPackageCheckoutSessionId,
     summary?.waterPackageCheckoutSessionId,
+    summary?.lateStayCheckoutSessionId,
     review?.stripeCheckoutSessionId,
     review?.drinkPackageCheckoutSessionId,
-    review?.waterPackageCheckoutSessionId
+    review?.waterPackageCheckoutSessionId,
+    review?.lateStayCheckoutSessionId
   ].filter(Boolean).map(String));
 
   for (const key of sessionKeys) {
@@ -246,6 +268,7 @@ async function forceRevokeAndDelete({ applicationStore, reviewStore, inviteStore
   }
 
   await orderStore.delete(`checkout-attempt-${submissionId}`).catch(() => {});
+  await orderStore.delete(`late-stay-checkout-attempt-${submissionId}`).catch(() => {});
   if (review?.inviteHash) await inviteStore.delete(String(review.inviteHash)).catch(() => {});
   await reviewStore.delete(submissionId);
   await applicationStore.delete(submissionId);
@@ -259,6 +282,7 @@ async function forceRevokeAndDelete({ applicationStore, reviewStore, inviteStore
     inviteRevoked: Boolean(review?.inviteHash),
     drinkPackageRevoked: Boolean(summary?.drinkPackagePurchased || review?.drinkPackagePurchased),
     waterPackageRevoked: Boolean(summary?.waterPackagePurchased || review?.waterPackagePurchased),
+    lateStayRevoked: Boolean(summary?.lateStayPurchased || review?.lateStayPurchased),
     revokedAt
   });
 
@@ -331,9 +355,6 @@ export default async (req) => {
       }, 409);
     }
 
-    // Revoke with an ETag guard before deletion. This makes revocation compete
-    // atomically with check-in: whichever writes first wins, and an admission
-    // that won the race remains protected from ordinary deletion.
     if (compTicket) {
       if (summary) {
         const revokedAt = new Date().toISOString();
