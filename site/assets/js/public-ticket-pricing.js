@@ -29,6 +29,7 @@
           const parent = node.parentElement;
           if (!parent || ['SCRIPT', 'STYLE', 'NOSCRIPT'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
           if (parent.closest('[data-ticket-price-transition]')) return NodeFilter.FILTER_REJECT;
+          if (parent.closest('[data-ticket-price-window], [data-ticket-price-increase]')) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         }
       });
@@ -42,6 +43,18 @@
 
       for (const element of document.querySelectorAll('[data-ticket-current-price]')) {
         element.textContent = current;
+      }
+
+      for (const windowCopy of document.querySelectorAll('[data-ticket-price-window]')) {
+        windowCopy.innerHTML = pricing.changed
+          ? 'Current approved admission price'
+          : 'Approved admission through <strong>11:59 PM HST September 1</strong>';
+      }
+
+      for (const increaseCopy of document.querySelectorAll('[data-ticket-price-increase]')) {
+        increaseCopy.innerHTML = pricing.changed
+          ? `Price increase now in effect · <strong>${current} admission</strong>`
+          : `Price increases to <strong>${pricing.afterDisplayPrice || '$35'}</strong> at <strong>12:00 AM HST September 2</strong>`;
       }
 
       const alert = document.querySelector('[data-ticket-price-alert]');
