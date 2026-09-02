@@ -63,6 +63,9 @@ has(publicInjector, 'Late Checkout /', 'Public add-on section must include Late 
 has(publicInjector, 'Limited to the first 30 purchasers.', 'Public late-stay copy must state the 30-person limit.');
 has(publicInjector, 'All add-ons are FINAL SALE / NON-REFUNDABLE.', 'Public add-on section must state the final-sale policy.');
 check(!/\bbeer\b|\bcocktails?\b|\bpremium cocktails?\b|\bpaid at the bar\b/i.test(publicInjector), 'Public add-on copy must not mention alcohol or bar-specific redemption.');
+has(publicInjector, 'html.replace(/<div class="event-facts"', 'Public add-ons must be injected adjacent to the event facts.');
+has(publicInjector, '(eventFacts) => `${eventFacts}${addOns}`', 'Public add-on injection must use a function replacement so $15/$20/$55 remain literal prices.');
+check(!publicInjector.includes('`$1${addOns}`'), 'Public add-on injection must never use a replacement string where $15 can be parsed as a capture reference.');
 has(publicPricing, 'deadlinePhrases', 'Public runtime pricing must protect historical deadline wording after the cutoff.');
 has(publicPricing, "alert.querySelector('strong').textContent = 'Current ticket price'", 'Public price alert must become current-price messaging after the cutoff.');
 has(publicOffersCss, '.ticket-price-alert', 'Public price alert must have dedicated styling.');
