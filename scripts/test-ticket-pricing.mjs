@@ -36,6 +36,9 @@ const cutover = read('netlify/functions/ticket-price-cutover.mjs');
 const api = read('netlify/functions/ticket-pricing.mjs');
 const netlify = read('netlify.toml');
 const env = read('.env.example');
+const publicPricing = read('site/assets/js/public-ticket-pricing.js');
+const publicInjector = read('scripts/inject-public-ticket-pricing.mjs');
+const publicOffersCss = read('site/assets/css/public-offers.css');
 
 has(checkout, "from './_ticket-pricing.mjs'", 'Stripe checkout must use centralized ticket pricing.');
 has(checkout, '`price-${unitAmount}`', 'Checkout idempotency must include the current ticket price.');
@@ -51,6 +54,19 @@ has(api, 'ticketPricing()', 'Public pricing endpoint must expose centralized pri
 has(netlify, 'from = "/api/ticket/pricing"', 'Public ticket pricing API route must exist.');
 has(env, 'NOCTURNE_TICKET_PRICE_AFTER_CENTS=3500', 'Environment example must document the $35 price.');
 has(env, 'NOCTURNE_TICKET_PRICE_CHANGE_ISO=2026-09-02T00:00:00-10:00', 'Environment example must document the midnight HST cutoff.');
+
+has(publicInjector, 'Ticket price increases tonight.', 'Public pages must prominently announce the ticket price increase.');
+has(publicInjector, 'The price becomes $35 at midnight.', 'Public price alert must state the $35 midnight price.');
+has(publicInjector, 'Six-Drink Package', 'Public add-on section must include the Six-Drink Package.');
+has(publicInjector, 'Unlimited Drinking Water', 'Public add-on section must include Unlimited Drinking Water.');
+has(publicInjector, 'Late Checkout /', 'Public add-on section must include Late Checkout / Car Camping.');
+has(publicInjector, 'Limited to the first 30 purchasers.', 'Public late-stay copy must state the 30-person limit.');
+has(publicInjector, 'All add-ons are FINAL SALE / NON-REFUNDABLE.', 'Public add-on section must state the final-sale policy.');
+check(!/\bbeer\b|\bcocktails?\b|\bpremium cocktails?\b|\bpaid at the bar\b/i.test(publicInjector), 'Public add-on copy must not mention alcohol or bar-specific redemption.');
+has(publicPricing, 'deadlinePhrases', 'Public runtime pricing must protect historical deadline wording after the cutoff.');
+has(publicPricing, "alert.querySelector('strong').textContent = 'Current ticket price'", 'Public price alert must become current-price messaging after the cutoff.');
+has(publicOffersCss, '.ticket-price-alert', 'Public price alert must have dedicated styling.');
+has(publicOffersCss, '.public-addon-grid', 'Public add-on section must have responsive card styling.');
 
 if (failures.length) {
   console.error('Ticket pricing regression checks failed:');
