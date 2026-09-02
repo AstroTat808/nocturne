@@ -12,9 +12,9 @@
   <link rel="stylesheet" href="/assets/css/admin-invites.css">
   <link rel="stylesheet" href="/assets/css/admin-tickets.css">
   <link rel="stylesheet" href="/assets/css/admin-hardening.css?v=20260824b">
-  <link rel="stylesheet" href="/assets/css/admin-drinks.css?v=20260825a">
+  <link rel="stylesheet" href="/assets/css/admin-drinks.css?v=20260901c">
   <script src="/assets/js/admin-auth-router.js?v=20260821h" defer></script>
-  <script src="/assets/js/admin-drinks.js?v=20260825a" defer></script>
+  <script src="/assets/js/admin-drinks.js?v=20260901c" defer></script>
   <script src="/assets/js/admin.js?v=20260825d" defer></script>
   <script src="/assets/js/admin-comp.js?v=20260821h" defer></script>
   <script src="/assets/js/admin-email.js?v=20260821h" defer></script>
@@ -23,7 +23,7 @@
   <script src="/assets/js/admin-delete.js?v=20260824a" defer></script>
   <script src="/assets/js/admin-export.js?v=20260824a" defer></script>
   <script src="/assets/js/admin-pagination.js?v=20260826a" defer></script>
-  <script src="/assets/js/admin-reminder-test.js?v=20260901a" defer></script>
+  <script src="/assets/js/admin-reminder-test.js?v=20260901c" defer></script>
 </head>
 <body class="admin-body">
   <header class="admin-topbar">
@@ -55,7 +55,7 @@
         <div>
           <p class="admin-kicker">NOCTURNE operations</p>
           <h1>Guest operations.</h1>
-          <p class="admin-muted">Review applicants, manage invitation codes, track ticket sales, issue complimentary tickets, resend digital tickets, process eligible admission refunds, and monitor event check-in. All drink packages are final sale and non-refundable.</p>
+          <p class="admin-muted">Review applicants, manage invitation codes, track ticket sales, issue complimentary tickets, resend digital tickets, process eligible admission refunds, and monitor event check-in. Optional add-ons are final sale and non-refundable where stated.</p>
         </div>
         <div class="admin-heading-actions">
           <button id="admin-export-applications" class="admin-outline-button" type="button">Export applications CSV</button>
@@ -88,11 +88,11 @@
 
       <section class="admin-ticket-overview admin-drink-overview" aria-labelledby="drink-ops-title">
         <div class="admin-ticket-overview-head"><div><p class="admin-kicker">Drink package operations</p><h2 id="drink-ops-title">Packages &amp; redemptions.</h2></div><div class="admin-ticket-revenue"><small>Package revenue</small><strong id="drink-package-revenue">$0.00</strong><span id="drink-upgrade-revenue"></span></div></div>
-        <div class="admin-drink-stats" aria-label="Drink package summary">
+        <div class="admin-drink-stats" aria-label="Package summary">
           <article><span id="drink-stat-purchased">0</span><small>Packages sold</small></article><article><span id="drink-stat-pending">0</span><small>Awaiting band</small></article><article><span id="drink-stat-active">0</span><small>Active bands</small></article><article><span id="drink-stat-exhausted">0</span><small>Exhausted</small></article><article><span id="drink-stat-redeemed">0</span><small>Credits redeemed</small></article><article><span id="drink-stat-remaining">0</span><small>Credits remaining</small></article>
         </div>
         <p id="drink-mix" class="admin-muted">Beer 0 · Well 0 · Premium 0 · Non-alcoholic 0</p>
-        <p class="admin-muted"><strong>Policy:</strong> All drink packages, including Unlimited Drinking Water, are final sale and non-refundable.</p>
+        <p class="admin-muted"><strong>Policy:</strong> Optional packages and limited-capacity add-ons are final sale and non-refundable where stated.</p>
       </section>
 
       <section class="admin-ticket-overview" aria-labelledby="ticket-ops-title">
