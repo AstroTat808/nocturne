@@ -2,6 +2,7 @@ import { getStore } from '@netlify/blobs';
 import { readTicketAccess } from './_ticket-auth.mjs';
 import { drinkPackageConfig } from './_drink-package.mjs';
 import { waterPackageConfig } from './_water-package.mjs';
+import { lateStayAvailability, lateStayConfig } from './_late-stay.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 
@@ -35,7 +36,12 @@ function formattedWaterPrice() {
   return `$${amount.toFixed(0)}`;
 }
 
-function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMessage = '' } = {}) {
+function formattedLateStayPrice() {
+  const amount = lateStayConfig().priceCents / 100;
+  return `$${amount.toFixed(0)}`;
+}
+
+function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMessage = '', lateStay = null } = {}) {
   const configured = checkoutConfigured();
   const ticketName = escapeHtml(process.env.NOCTURNE_TICKET_NAME || 'NOCTURNE Festival — General Admission');
 
@@ -56,7 +62,11 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
     status = `<div class="private-access-status"><strong>${ticketName}</strong><br>${formattedPrice()} · One ticket per approved invitation</div>`;
     const packageOption = drinkPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="drink_package" value="yes"><span><strong>I am 21+ — Add the Six-Drink Package · ${formattedPackagePrice()}</strong><small>Six credits for beer or well cocktails. Premium cocktails use one credit plus a $5 upgrade paid at the bar. Valid photo ID and event wristband required. Non-transferable; unused credits expire when event bar service ends. Service may be refused.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> The Six-Drink Package cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</small></span></label><label class="drink-package-option"><input type="checkbox" name="drink_package_policy" value="yes" disabled><span><strong>I understand the Six-Drink Package is non-refundable.</strong><small>This acknowledgment is required before checkout when the Six-Drink Package is selected.</small></span></label>` : '';
     const waterOption = waterPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="water_package" value="yes"><span><strong>Add Unlimited Drinking Water · ${formattedWaterPrice()}</strong><small>Unlimited drinking-water service for the registered ticket holder throughout festival operating hours. One package per ticket. Personal and non-transferable.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> The Unlimited Drinking Water Package cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash.</small></span></label><label class="drink-package-option"><input type="checkbox" name="water_package_policy" value="yes" disabled><span><strong>I understand the Unlimited Drinking Water Package is non-refundable.</strong><small>This acknowledgment is required before checkout when Unlimited Drinking Water is selected.</small></span></label>` : '';
-    actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-checkout">${packageOption}${waterOption}<div class="private-access-actions"><button class="btn" type="submit">Continue to Checkout →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></div></form>`;
+    const lateStayConfigValue = lateStayConfig();
+    const lateStayRemaining = Number(lateStay?.remaining ?? lateStayConfigValue.capacity);
+    const lateStaySoldOut = Boolean(lateStay?.soldOut);
+    const lateStayOption = lateStayConfigValue.enabled ? `<label class="drink-package-option"${lateStaySoldOut ? ' style="opacity:.62"' : ''}><input type="checkbox" name="late_stay" value="yes" ${lateStaySoldOut ? 'disabled' : ''}><span><strong>${lateStaySoldOut ? 'SOLD OUT — ' : ''}Add Late Checkout / Car Camping · ${formattedLateStayPrice()}</strong><small>Stay on the property after NOCTURNE ends at 3:00 AM until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff. Each person staying after 3:00 AM needs their own add-on.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>LIMITED CAPACITY:</strong> ${lateStaySoldOut ? 'All 30 spots are currently claimed.' : `${lateStayRemaining} of ${lateStayConfigValue.capacity} spots currently available.`} Final sale and non-transferable.</small></span></label>${lateStaySoldOut ? '' : '<label class="drink-package-option"><input type="checkbox" name="late_stay_policy" value="yes" disabled><span><strong>I understand this is a limited-capacity, final-sale add-on for one ticket holder.</strong><small>This acknowledgment is required when Late Checkout / Car Camping is selected.</small></span></label>'}` : '';
+    actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-checkout">${packageOption}${waterOption}${lateStayOption}<div class="private-access-actions"><button class="btn" type="submit">Continue to Checkout →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></div></form>`;
   } else {
     lead = 'Your invitation was successfully redeemed. The private ticket checkout is not live yet, so there is nothing else you need to do right now.';
     status = '<div class="private-access-status"><strong>Private ticket access is being prepared.</strong><br>Approved guests will receive the next instructions when checkout opens.</div>';
@@ -76,7 +86,7 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
   <link rel="icon" href="/assets/images/favicon.png">
   <link rel="stylesheet" href="/assets/css/styles.css">
   <link rel="stylesheet" href="/assets/css/private-access.css">
-  <script src="/assets/js/ticket-package-policy.js" defer></script>
+  <script src="/assets/js/ticket-package-policy.js?v=20260901a" defer></script>
 </head>
 <body class="private-access-page">
   <main class="private-access-shell">
@@ -89,7 +99,7 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
       <p>${escapeHtml(lead)}</p>
       ${message}
       ${status}
-      <p>${paid ? 'Your purchase is recorded in the NOCTURNE guest system. Keep your confirmation email for your records.' : blocked ? 'A refunded or disputed payment cannot be replaced through the private checkout without administrative review.' : configured ? 'Checkout is processed securely by Stripe. Your approved invitation permits one admission purchase plus any eligible optional packages you select below.' : 'Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.'}</p>
+      <p>${paid ? 'Your purchase is recorded in the NOCTURNE guest system. Keep your confirmation email for your records.' : blocked ? 'A refunded or disputed payment cannot be replaced through the private checkout without administrative review.' : configured ? 'Checkout is processed securely by Stripe. Your approved invitation permits one admission purchase plus any eligible optional add-ons you select below.' : 'Keep an eye on the email and mobile number used in your application. Event details and ticket instructions will be released privately.'}</p>
       ${actions}
     </section>
   </main>
@@ -118,12 +128,14 @@ export default async (req) => {
   let checkoutMessage = '';
   if (url.searchParams.get('checkout') === 'cancelled') checkoutMessage = 'Checkout was cancelled. No charge was completed.';
   if (url.searchParams.get('checkout_error')) checkoutMessage = url.searchParams.get('checkout_error').slice(0, 240);
+  const lateStay = !order || order.status !== 'paid' ? await lateStayAvailability().catch(() => null) : null;
 
   return new Response(renderPage({
     paid: order?.status === 'paid',
     blocked: ['refunded', 'disputed'].includes(String(order?.status || '').toLowerCase()),
     ticketId: order?.ticketId || '',
-    checkoutMessage
+    checkoutMessage,
+    lateStay
   }), {
     status: 200,
     headers: {
