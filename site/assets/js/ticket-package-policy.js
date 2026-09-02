@@ -1,22 +1,20 @@
 (() => {
-  const pairs = [
-    ['drink_package', 'drink_package_policy'],
-    ['water_package', 'water_package_policy'],
-    ['late_stay', 'late_stay_policy']
-  ];
+  const packageBoxes = [
+    document.querySelector('input[name="drink_package"]'),
+    document.querySelector('input[name="water_package"]'),
+    document.querySelector('input[name="late_stay"]')
+  ].filter(Boolean);
+  const policyBox = document.querySelector('input[name="package_policy"]');
 
-  for (const [packageName, policyName] of pairs) {
-    const packageBox = document.querySelector(`input[name="${packageName}"]`);
-    const policyBox = document.querySelector(`input[name="${policyName}"]`);
-    if (!packageBox || !policyBox) continue;
+  if (!policyBox || !packageBoxes.length) return;
 
-    const sync = () => {
-      policyBox.disabled = !packageBox.checked;
-      policyBox.required = packageBox.checked;
-      if (!packageBox.checked) policyBox.checked = false;
-    };
+  const sync = () => {
+    const anySelected = packageBoxes.some((box) => box.checked && !box.disabled);
+    policyBox.disabled = !anySelected;
+    policyBox.required = anySelected;
+    if (!anySelected) policyBox.checked = false;
+  };
 
-    packageBox.addEventListener('change', sync);
-    sync();
-  }
+  for (const packageBox of packageBoxes) packageBox.addEventListener('change', sync);
+  sync();
 })();
