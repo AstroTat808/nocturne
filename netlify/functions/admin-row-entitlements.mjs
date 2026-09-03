@@ -55,9 +55,9 @@ export default async (req) => {
       const lateStayPaid = paidEntitlement(lateStayPurchased, lateStayStatus, lateStayPurchaseType, lateStayCheckoutStatus, state);
       return {
         applicationId: application.id || key, email: String(application.email).trim().toLowerCase(), ticketId: summary?.ticketId || review?.ticketId || null, ticketState: state, hasValidTicket: ['paid', 'checked_in'].includes(state),
-        drinkPackagePurchased: drinkPurchased, drinkPackageStatus: drinkStatus, hasDrinkPackage: activeEntitlement(drinkPurchased, drinkStatus), drinkCreditsRemaining: Number(summary?.drinkCreditsRemaining ?? review?.drinkCreditsRemaining ?? 0), drinkPackagePaid: drinkPaid, drinkPackageRevenueCents: drinkPaid ? Number(summary?.drinkPackagePriceCents || review?.drinkPackagePriceCents || drinkPrice) : 0,
-        waterPackagePurchased: waterPurchased, waterPackageStatus: waterStatus, hasWaterPackage: activeEntitlement(waterPurchased, waterStatus), waterPackagePaid: waterPaid, waterPackageRevenueCents: waterPaid ? Number(summary?.waterPackagePriceCents || review?.waterPackagePriceCents || waterPrice) : 0,
-        lateStayPurchased, lateStayStatus, hasLateStay: activeEntitlement(lateStayPurchased, lateStayStatus), lateStayPaid, lateStayRevenueCents: lateStayPaid ? Number(summary?.lateStayPriceCents || review?.lateStayPriceCents || lateStayPrice) : 0,
+        drinkPackagePurchased: drinkPurchased, drinkPackageStatus: drinkStatus, drinkPackagePurchaseType: drinkPurchaseType, hasDrinkPackage: activeEntitlement(drinkPurchased, drinkStatus), drinkCreditsRemaining: Number(summary?.drinkCreditsRemaining ?? review?.drinkCreditsRemaining ?? 0), drinkPackagePaid: drinkPaid, drinkPackageRevenueCents: drinkPaid ? Number(summary?.drinkPackagePriceCents || review?.drinkPackagePriceCents || drinkPrice) : 0,
+        waterPackagePurchased: waterPurchased, waterPackageStatus: waterStatus, waterPackagePurchaseType: waterPurchaseType, hasWaterPackage: activeEntitlement(waterPurchased, waterStatus), waterPackagePaid: waterPaid, waterPackageRevenueCents: waterPaid ? Number(summary?.waterPackagePriceCents || review?.waterPackagePriceCents || waterPrice) : 0,
+        lateStayPurchased, lateStayStatus, lateStayPurchaseType, hasLateStay: activeEntitlement(lateStayPurchased, lateStayStatus), lateStayPaid, lateStayRevenueCents: lateStayPaid ? Number(summary?.lateStayPriceCents || review?.lateStayPriceCents || lateStayPrice) : 0,
         lateStayDepartureTime: summary?.lateStayDepartureTime || review?.lateStayDepartureTime || null, lateStaySlot: summary?.lateStaySlot || review?.lateStaySlot || null
       };
     }))).filter(Boolean);
@@ -68,12 +68,20 @@ export default async (req) => {
       if (entry.hasDrinkPackage) counts.activeDrinkPackages += 1;
       if (entry.hasWaterPackage) counts.activeWaterPackages += 1;
       if (entry.hasLateStay) counts.activeLateStay += 1;
-      counts.drinkPackageRevenueCents += Number(entry.drinkPackageRevenueCents || 0);
-      counts.waterPackageRevenueCents += Number(entry.waterPackageRevenueCents || 0);
-      counts.lateStayRevenueCents += Number(entry.lateStayRevenueCents || 0);
-      counts.packageRevenueCents += Number(entry.drinkPackageRevenueCents || 0) + Number(entry.waterPackageRevenueCents || 0) + Number(entry.lateStayRevenueCents || 0);
+      const drinkRevenue = Number(entry.drinkPackageRevenueCents || 0);
+      const waterRevenue = Number(entry.waterPackageRevenueCents || 0);
+      const lateRevenue = Number(entry.lateStayRevenueCents || 0);
+      counts.drinkPackageRevenueCents += drinkRevenue;
+      counts.waterPackageRevenueCents += waterRevenue;
+      counts.lateStayRevenueCents += lateRevenue;
+      counts.packageRevenueCents += drinkRevenue + waterRevenue + lateRevenue;
+      for (const [type, revenue] of [[entry.drinkPackagePurchaseType, drinkRevenue], [entry.waterPackagePurchaseType, waterRevenue], [entry.lateStayPurchaseType, lateRevenue]]) {
+        if (!revenue) continue;
+        if (type === 'addon') counts.standaloneAddonRevenueCents += revenue;
+        else counts.bundledAddonRevenueCents += revenue;
+      }
       return counts;
-    }, { drinkPackagePurchases: 0, waterPackagePurchases: 0, lateStayPurchases: 0, activeDrinkPackages: 0, activeWaterPackages: 0, activeLateStay: 0, drinkPackageRevenueCents: 0, waterPackageRevenueCents: 0, lateStayRevenueCents: 0, packageRevenueCents: 0 });
+    }, { drinkPackagePurchases: 0, waterPackagePurchases: 0, lateStayPurchases: 0, activeDrinkPackages: 0, activeWaterPackages: 0, activeLateStay: 0, drinkPackageRevenueCents: 0, waterPackageRevenueCents: 0, lateStayRevenueCents: 0, packageRevenueCents: 0, bundledAddonRevenueCents: 0, standaloneAddonRevenueCents: 0 });
     return json({ entries, summary });
   } catch (error) { console.error('NOCTURNE admin row entitlement lookup failed:', error); return json({ error: 'Ticket/package indicators could not be loaded.' }, 500); }
 };
