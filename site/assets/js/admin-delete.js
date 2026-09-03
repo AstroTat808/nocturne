@@ -1,5 +1,5 @@
 (() => {
-  const DELETE_API = '/api/admin/delete-application';
+  const DELETE_API = '/.netlify/functions/admin-delete-application-v2';
   const nativeRenderDetail = renderDetail;
 
   function applicationStats() {
