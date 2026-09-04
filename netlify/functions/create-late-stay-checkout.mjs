@@ -40,10 +40,27 @@ async function stripeRequest(path, body, idempotencyKey = '') {
   return data;
 }
 
+async function stripeCheckoutSession(sessionId) {
+  if (!sessionId) return null;
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
+    headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return null;
+  return data;
+}
+
 function checkoutStillOpen(summary) {
   if (summary?.lateStayCheckoutStatus !== 'checkout_created' || !summary.lateStayCheckoutUrl) return false;
   const expiresAt = new Date(summary.lateStayCheckoutExpiresAt || 0).getTime();
   return Number.isFinite(expiresAt) && expiresAt > Date.now() + 60_000;
+}
+
+async function reusableExistingCheckout(summary) {
+  if (!checkoutStillOpen(summary) || !summary?.lateStayCheckoutSessionId) return null;
+  const session = await stripeCheckoutSession(summary.lateStayCheckoutSessionId);
+  if (!session || session.status !== 'open' || session.payment_status === 'paid' || !session.url) return null;
+  return session;
 }
 
 async function claimAttempt(store, submissionId) {
@@ -85,7 +102,37 @@ export default async (req) => {
     if (summary !== summaryEntry?.data) summaryEntry = await orderStore.getWithMetadata(summaryKey, { type: 'json', consistency: 'strong' });
   }
   if (!application || !lateStayAddonEligible(summary, review, parsed.ticketId)) return fail(req, 'Only an active paid or complimentary ticket can add Late Checkout / Car Camping.', 403);
-  if (checkoutStillOpen(summary)) return browserFormPost(req) ? redirect(summary.lateStayCheckoutUrl) : json({ ok: true, checkoutUrl: summary.lateStayCheckoutUrl, reused: true });
+
+  if (checkoutStillOpen(summary)) {
+    const existingSession = await reusableExistingCheckout(summary);
+    if (existingSession) {
+      return browserFormPost(req) ? redirect(existingSession.url) : json({ ok: true, checkoutUrl: existingSession.url, reused: true });
+    }
+
+    await releaseLateStayReservation({ slot: summary.lateStaySlot, reservationId: summary.lateStayReservationId, reason: 'stale_stripe_checkout' }).catch(() => {});
+    const staleAt = new Date().toISOString();
+    const staleWrite = await orderStore.setJSON(summaryKey, {
+      ...summary,
+      lateStayCheckoutStatus: 'expired',
+      lateStayCheckoutUrl: null,
+      lateStayCheckoutExpiresAt: null,
+      lateStaySlot: null,
+      lateStayReservationId: null,
+      updatedAt: staleAt
+    }, { onlyIfMatch: summaryEntry.etag }).catch(() => ({ modified: false }));
+    await writeAudit('late_stay.stale_checkout_recovered', {
+      submissionId: parsed.submissionId,
+      ticketId: parsed.ticketId,
+      stripeCheckoutSessionId: summary.lateStayCheckoutSessionId,
+      recoveredAt: staleAt,
+      localRecordUpdated: Boolean(staleWrite?.modified)
+    }).catch(() => {});
+    summaryEntry = await orderStore.getWithMetadata(summaryKey, { type: 'json', consistency: 'strong' });
+    summary = summaryEntry?.data || summary;
+    if (summary?.lateStayPurchased) return fail(req, 'This ticket already includes Late Checkout / Car Camping.', 409);
+    if (!lateStayAddonEligible(summary, review, parsed.ticketId)) return fail(req, 'Late Checkout / Car Camping checkout could not be refreshed. Please reload your digital ticket and try again.', 409);
+  }
+
   const availability = await lateStayAvailability();
   if (availability.soldOut) return fail(req, 'Late Checkout / Car Camping is sold out. All 30 spots have been claimed or are currently reserved in checkout.', 409);
   const claim = await claimAttempt(orderStore, parsed.submissionId);
