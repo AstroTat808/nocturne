@@ -51,6 +51,11 @@ has(addonCheckout, "'metadata[purchaseType]': 'late-stay-addon'", 'Post-ticket S
 has(addonCheckout, 'reserveLateStaySlot', 'Post-ticket checkout must reserve late-stay capacity.');
 has(addonCheckout, 'releaseLateStayReservation', 'Failed post-ticket checkouts must release their capacity reservation.');
 has(addonCheckout, 'Late Checkout / Car Camping — NON-REFUNDABLE', 'Post-ticket Stripe checkout must label late stay as non-refundable.');
+has(addonCheckout, 'stripeCheckoutSession(summary.lateStayCheckoutSessionId)', 'Existing Late Stay checkout links must be verified against Stripe before reuse.');
+has(addonCheckout, "session.status !== 'open'", 'Closed or expired Stripe checkout sessions must not be reused.');
+has(addonCheckout, "reason: 'stale_stripe_checkout'", 'Stale Late Stay checkout reservations must be released before retry.');
+has(addonCheckout, "lateStayCheckoutStatus: 'expired'", 'Stale local Late Stay checkout state must be cleared before creating a replacement session.');
+has(addonCheckout, "writeAudit('late_stay.stale_checkout_recovered'", 'Stale Late Stay checkout recovery must be auditable.');
 
 has(webhook, 'fulfillBundledLateStay', 'Bundled ticket payments must finalize late-stay entitlement.');
 has(webhook, 'markLateStaySold', 'Bundled payment fulfillment must permanently consume the reserved capacity slot.');
