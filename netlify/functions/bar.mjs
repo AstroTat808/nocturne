@@ -28,6 +28,7 @@ function ticketToken(value = '') { const raw = String(value).trim(); if (!raw) r
 function wristband(value = '') { return String(value).trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 96); }
 function wristbandHash(value) { return createHash('sha256').update(`nocturne-wristband:${value}`).digest('hex'); }
 function publicPackage(summary, application) { return { submissionId: summary.submissionId, ticketId: summary.ticketId, guestName: application?.preferredName || application?.fullName || 'NOCTURNE Guest', packageStatus: summary.drinkPackageStatus, creditsPurchased: Number(summary.drinkCreditsPurchased || 0), creditsRedeemed: Number(summary.drinkCreditsRedeemed || 0), creditsRemaining: Number(summary.drinkCreditsRemaining || 0), activatedAt: summary.drinkPackageActivatedAt || null, lastRedeemedAt: summary.drinkPackageLastRedeemedAt || null }; }
+function allowedOrigin(req){const origin=req.headers.get('origin');if(!origin)return true;const fetchSite=String(req.headers.get('sec-fetch-site')||'').toLowerCase();if(fetchSite==='same-origin')return true;if(fetchSite==='cross-site')return false;const allowed=new Set(['https://nocturnefestival.com','https://www.nocturnefestival.com']);try{allowed.add(new URL(req.url).origin)}catch{}for(const value of[process.env.NOCTURNE_SITE_URL,process.env.URL,process.env.DEPLOY_PRIME_URL]){try{if(value)allowed.add(new URL(value).origin)}catch{}}return allowed.has(origin)}
 
 async function resolvePackage(value) {
   const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
@@ -121,8 +122,7 @@ async function redeem(inputData, staff) {
 export default async (req) => {
   if (!['GET', 'POST'].includes(req.method)) return json({ error: 'Method not allowed.' }, 405);
   if (req.method === 'GET') { const staff = session(req); return staff ? json({ authenticated: true, staffName: staff.staffName }) : json({ authenticated: false }, 401); }
-  const origin = req.headers.get('origin');
-  if (origin && origin !== new URL(req.url).origin) return json({ error: 'Origin not allowed.' }, 403);
+  if (!allowedOrigin(req)) return json({ error: 'Origin not allowed.' }, 403);
   const data = await input(req); if (!data) return json({ error: 'Invalid request.' }, 400);
   const action = String(data.action || 'lookup');
   if (action === 'login') { const staffName = String(data.staffName || '').trim().slice(0, 80); if (!key() || !secret()) return json({ error: 'Bar authentication is not configured.' }, 500); if (!staffName) return json({ error: 'Enter the bartender name.' }, 400); if (!safeEqual(data.password || '', key())) return json({ error: 'Invalid bar password.' }, 401); return json({ ok: true, staffName }, 200, { 'Set-Cookie': setCookie(makeSession(staffName)) }); }

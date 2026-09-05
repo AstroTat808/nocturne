@@ -8,9 +8,9 @@
   <title>Event Check-In | NOCTURNE</title>
   <link rel="icon" href="/assets/images/favicon.png">
   <link rel="stylesheet" href="/assets/css/styles.css">
-  <link rel="stylesheet" href="/assets/css/check-in.css?v=20260826b">
+  <link rel="stylesheet" href="/assets/css/check-in.css?v=20260905c">
   <script src="/assets/vendor/html5-qrcode.min.js" defer></script>
-  <script src="/assets/js/check-in.js?v=20260826b" defer></script>
+  <script src="/assets/js/check-in.js?v=20260905c" defer></script>
 </head>
 <body class="checkin-body">
   <main class="checkin-shell">
@@ -47,8 +47,8 @@
       <p id="scanner-help" class="checkin-help"><strong>Stay on this screen.</strong> The live scanner uses the iPhone rear camera inside Safari. Staff do not need to open the iPhone Camera app.</p>
 
       <details class="checkin-backup">
-        <summary>Backup options</summary>
-        <p>Use these only if the live scanner cannot read a damaged, dim, or saved ticket QR.</p>
+        <summary>Backup & emergency options</summary>
+        <p>Use these if a QR will not load, the guest's phone dies, or the live scanner cannot read the ticket.</p>
         <div class="checkin-actions">
           <button id="scan-image" class="btn secondary" type="button">Scan QR From Photo</button>
           <input id="qr-image-input" type="file" accept="image/*" hidden>
@@ -58,6 +58,12 @@
           <input id="ticket-input" name="ticket" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste ticket URL or token">
           <button class="btn secondary" type="submit">Validate Ticket</button>
         </form>
+        <form id="emergency-lookup-form" class="checkin-form manual-checkin-form">
+          <label for="emergency-lookup-input">Emergency guest lookup</label>
+          <input id="emergency-lookup-input" type="search" autocomplete="off" placeholder="Name or email — at least 3 characters" minlength="3" required>
+          <button class="btn secondary" type="submit">Find Guest</button>
+        </form>
+        <div id="emergency-lookup-results" class="checkin-lookup-results" aria-live="polite"></div>
       </details>
 
       <section id="checkin-result" class="checkin-result" data-state="idle" aria-live="assertive">

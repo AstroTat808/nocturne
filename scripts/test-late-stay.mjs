@@ -26,9 +26,9 @@ has(helper, 'unlimited: true', 'Late Stay config must report unlimited inventory
 has(helper, "LATE_STAY_DEPARTURE = '10:00 AM'", 'Late Stay departure must be 10:00 AM.');
 has(helper, "LATE_STAY_POLICY_LABEL = 'FINAL SALE / NON-REFUNDABLE'", 'Late Stay must remain final sale/non-refundable.');
 
-has(manager, "option(late, 'late_stay'", 'Manage Add-Ons must expose Late Stay.');
-has(manager, 'until 10:00 AM', 'Manage Add-Ons must show the 10:00 AM departure.');
-has(manager, 'Select any combination below and pay once through Stripe.', 'Manage Add-Ons must advertise one combined checkout.');
+has(manager, "name: 'late_stay'", 'Manage Add-Ons must expose Late Stay.');
+has(manager, 'STAY UNTIL 10 AM', 'Manage Add-Ons must prominently show the 10:00 AM departure.');
+has(manager, 'Select one, two, or all three.', 'Manage Add-Ons must advertise one combined checkout.');
 lacks(manager, '30 spots', 'Manage Add-Ons must not mention the former capacity cap.');
 
 has(bundleCheckout, "'metadata[purchaseType]': 'addon-bundle'", 'Combined checkout must identify add-on bundle sessions.');
@@ -39,7 +39,7 @@ has(addonCheckout, 'reserveLateStaySlot', 'Legacy standalone Late Stay checkout 
 
 has(ticketApi, 'unlimited: true', 'Ticket Late Stay API must report unlimited inventory.');
 has(ticketView, 'Departure by 10:00 AM', 'Digital ticket must show 10:00 AM for purchased Late Stay.');
-has(ticketView, 'Manage Add-Ons →', 'Digital ticket must route add-on purchases through Manage Add-Ons.');
+has(ticketView, 'Buy / Manage Add-Ons →', 'Digital ticket must route add-on purchases through Buy / Manage Add-Ons.');
 has(webhookV2, "purchaseType === 'addon-bundle'", 'Webhook v2 must intercept combined add-on purchases.');
 has(bundle, 'markLateStaySold', 'Combined fulfillment must finalize Late Stay tracking.');
 
