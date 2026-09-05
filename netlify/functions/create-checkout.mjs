@@ -15,7 +15,10 @@ function json(data, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' } });
 }
 function redirect(location) { return new Response(null, { status: 303, headers: { Location: location, 'Cache-Control': 'no-store' } }); }
-function browserFormPost(req) { return (req.headers.get('content-type') || '').toLowerCase().includes('application/x-www-form-urlencoded'); }
+export function browserFormPost(req) {
+  const contentType = (req.headers.get('content-type') || '').toLowerCase();
+  return contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data');
+}
 function fail(req, message, status) { return browserFormPost(req) ? redirect(`/ticket-access?checkout_error=${encodeURIComponent(message)}`) : json({ error: message }, status); }
 function checkoutConfigured() { const price = ticketPricing().priceCents; return Boolean(process.env.STRIPE_SECRET_KEY && Number.isInteger(price) && price >= 50); }
 function siteUrl(req) { return (process.env.NOCTURNE_SITE_URL || new URL(req.url).origin).replace(/\/$/, ''); }
@@ -51,29 +54,61 @@ async function claimCheckoutAttempt(store, submissionId, selectionKey) {
   return result.modified ? { key, attempt } : null;
 }
 
-async function checkoutInput(req) {
+function checkoutSelection(source) {
+  return {
+    drinkPackage: drinkPackageRequested(source.get('drink_package')),
+    waterPackage: requested(source.get('water_package')),
+    lateStay: requested(source.get('late_stay')),
+    packagePolicyAccepted: String(source.get('package_policy') || '').toLowerCase() === 'yes'
+  };
+}
+
+export async function checkoutInput(req) {
   const contentType = (req.headers.get('content-type') || '').toLowerCase();
-  try {
-    if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
-      const form = await req.formData();
-      return {
-        drinkPackage: drinkPackageRequested(form.get('drink_package')),
-        waterPackage: requested(form.get('water_package')),
-        lateStay: requested(form.get('late_stay')),
-        packagePolicyAccepted: String(form.get('package_policy') || '').toLowerCase() === 'yes'
-      };
-    }
-    if (contentType.includes('application/json')) {
-      const data = await req.json();
-      return {
-        drinkPackage: drinkPackageRequested(data?.drinkPackage),
-        waterPackage: requested(data?.waterPackage),
-        lateStay: requested(data?.lateStay),
-        packagePolicyAccepted: data?.packagePolicy === true || requested(data?.packagePolicy)
-      };
-    }
-  } catch {}
+  if (contentType.includes('application/x-www-form-urlencoded')) {
+    return checkoutSelection(new URLSearchParams(await req.text()));
+  }
+  if (contentType.includes('multipart/form-data')) {
+    return checkoutSelection(await req.formData());
+  }
+  if (contentType.includes('application/json')) {
+    const data = await req.json();
+    return {
+      drinkPackage: drinkPackageRequested(data?.drinkPackage),
+      waterPackage: requested(data?.waterPackage),
+      lateStay: requested(data?.lateStay),
+      packagePolicyAccepted: data?.packagePolicy === true || requested(data?.packagePolicy)
+    };
+  }
   return { drinkPackage: false, waterPackage: false, lateStay: false, packagePolicyAccepted: false };
+}
+
+export function appendBundledAddOnLineItems(params, { currency, includeDrinkPackage, includeWaterPackage, includeLateStay, packageConfig, waterConfig, lateStay }) {
+  let lineIndex = 1;
+  if (includeDrinkPackage) {
+    params[`line_items[${lineIndex}][quantity]`] = '1';
+    params[`line_items[${lineIndex}][price_data][currency]`] = currency;
+    params[`line_items[${lineIndex}][price_data][unit_amount]`] = String(packageConfig.priceCents);
+    params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Six-Drink Package — NON-REFUNDABLE';
+    params[`line_items[${lineIndex}][price_data][product_data][description]`] = 'FINAL SALE / NON-REFUNDABLE. Six prepaid bar credits. Beer or well cocktail per credit; premium cocktails require a $5 upgrade at the bar. 21+ ID required. Unused credits are not refundable, exchangeable, transferable, or redeemable for cash.';
+    lineIndex += 1;
+  }
+  if (includeWaterPackage) {
+    params[`line_items[${lineIndex}][quantity]`] = '1';
+    params[`line_items[${lineIndex}][price_data][currency]`] = currency;
+    params[`line_items[${lineIndex}][price_data][unit_amount]`] = String(waterConfig.priceCents);
+    params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Unlimited Drinking Water — NON-REFUNDABLE';
+    params[`line_items[${lineIndex}][price_data][product_data][description]`] = 'FINAL SALE / NON-REFUNDABLE. Unlimited drinking-water service for the registered ticket holder during festival operating hours. One package per ticket; non-transferable.';
+    lineIndex += 1;
+  }
+  if (includeLateStay) {
+    params[`line_items[${lineIndex}][quantity]`] = '1';
+    params[`line_items[${lineIndex}][price_data][currency]`] = currency;
+    params[`line_items[${lineIndex}][price_data][unit_amount]`] = String(lateStay.priceCents);
+    params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Late Checkout / Car Camping — NON-REFUNDABLE';
+    params[`line_items[${lineIndex}][price_data][product_data][description]`] = `FINAL SALE / NON-REFUNDABLE. ${LATE_STAY_POLICY_TEXT} Limited to 30 guests. Stay on the property after the 3:00 AM event end until 8:00 AM. Each person remaining after 3:00 AM needs their own add-on.`;
+  }
+  return params;
 }
 
 export default async (req) => {
@@ -83,7 +118,13 @@ export default async (req) => {
   const access = readTicketAccess(req);
   if (!access) return fail(req, 'Private ticket access has expired. Redeem a new invitation to continue.', 401);
   if (!checkoutConfigured()) return fail(req, 'Ticket checkout is not configured yet.', 503);
-  const input = await checkoutInput(req);
+  let input;
+  try {
+    input = await checkoutInput(req);
+  } catch (error) {
+    console.error('NOCTURNE checkout selection parsing failed:', error);
+    return fail(req, 'Checkout selections could not be read. Reload your private ticket page and try again.', 400);
+  }
   const packageConfig = drinkPackageConfig();
   const waterConfig = waterPackageConfig();
   const lateStay = lateStayConfig();
@@ -164,30 +205,7 @@ export default async (req) => {
     stripeExpiresAt = Math.floor(pricing.changeAtEpochMs / 1000);
   }
   if (stripeExpiresAt) params.expires_at = String(stripeExpiresAt);
-  let lineIndex = 1;
-  if (includeDrinkPackage) {
-    params[`line_items[${lineIndex}][quantity]`] = '1';
-    params[`line_items[${lineIndex}][price_data][currency]`] = currency;
-    params[`line_items[${lineIndex}][price_data][unit_amount]`] = String(packageConfig.priceCents);
-    params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Six-Drink Package — NON-REFUNDABLE';
-    params[`line_items[${lineIndex}][price_data][product_data][description]`] = 'FINAL SALE / NON-REFUNDABLE. Six prepaid bar credits. Beer or well cocktail per credit; premium cocktails require a $5 upgrade at the bar. 21+ ID required. Unused credits are not refundable, exchangeable, transferable, or redeemable for cash.';
-    lineIndex += 1;
-  }
-  if (includeWaterPackage) {
-    params[`line_items[${lineIndex}][quantity]`] = '1';
-    params[`line_items[${lineIndex}][price_data][currency]`] = currency;
-    params[`line_items[${lineIndex}][price_data][unit_amount]`] = String(waterConfig.priceCents);
-    params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Unlimited Drinking Water — NON-REFUNDABLE';
-    params[`line_items[${lineIndex}][price_data][product_data][description]`] = 'FINAL SALE / NON-REFUNDABLE. Unlimited drinking-water service for the registered ticket holder during festival operating hours. One package per ticket; non-transferable.';
-    lineIndex += 1;
-  }
-  if (includeLateStay) {
-    params[`line_items[${lineIndex}][quantity]`] = '1';
-    params[`line_items[${lineIndex}][price_data][currency]`] = currency;
-    params[`line_items[${lineIndex}][price_data][unit_amount]`] = String(lateStay.priceCents);
-    params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Late Checkout / Car Camping — NON-REFUNDABLE';
-    params[`line_items[${lineIndex}][price_data][product_data][description]`] = `FINAL SALE / NON-REFUNDABLE. ${LATE_STAY_POLICY_TEXT} Limited to 30 guests. Stay on the property after the 3:00 AM event end until 8:00 AM. Each person remaining after 3:00 AM needs their own add-on.`;
-  }
+  appendBundledAddOnLineItems(params, { currency, includeDrinkPackage, includeWaterPackage, includeLateStay, packageConfig, waterConfig, lateStay });
   if (application.email) params.customer_email = application.email;
   if (process.env.NOCTURNE_TICKET_DESCRIPTION) params['line_items[0][price_data][product_data][description]'] = String(process.env.NOCTURNE_TICKET_DESCRIPTION).slice(0, 500);
 
