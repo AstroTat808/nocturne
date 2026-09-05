@@ -2,6 +2,22 @@
   const dashboard = document.querySelector('#admin-dashboard');
   if (!dashboard) return;
 
+  const dedupeWaiverTools = () => {
+    const panels = Array.from(dashboard.querySelectorAll('.admin-waiver-tools'));
+    for (const panel of panels.slice(1)) panel.remove();
+  };
+  if (!window.__nocturneAdminGateDedupeObserver) {
+    const observer = new MutationObserver(dedupeWaiverTools);
+    observer.observe(dashboard, { childList: true, subtree: true });
+    window.__nocturneAdminGateDedupeObserver = observer;
+  }
+  dedupeWaiverTools();
+  if (window.__nocturneAdminGateUiInitialized || dashboard.querySelector('.admin-waiver-tools')) {
+    window.__nocturneAdminGateUiInitialized = true;
+    return;
+  }
+  window.__nocturneAdminGateUiInitialized = true;
+
   const nav = dashboard.querySelector('.admin-operations-nav');
   if (nav && !nav.querySelector('[data-event-day-ready-link]')) {
     const link = document.createElement('a');

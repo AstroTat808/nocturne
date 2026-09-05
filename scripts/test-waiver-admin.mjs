@@ -11,6 +11,7 @@ const dailyInvite = read('netlify/functions/daily-invite-reminders.mjs');
 const dailyPurchase = read('netlify/functions/daily-purchase-reminders.mjs');
 const email = read('netlify/functions/_waiver-reminder-email.mjs');
 const adminWaiver = read('site/assets/js/admin-gate.js');
+const adminLoader = read('site/assets/js/admin-ticket-source-stats.js');
 const adminEventDay = read('site/assets/js/admin-event-day.js');
 const adminEventDayHtml = read('site/admin-event-day.html');
 
@@ -51,10 +52,13 @@ assert.ok(adminWaiver.includes('admin-waiver-row-remind'), 'Unsigned main-admin 
 assert.ok(adminWaiver.includes('SEND WAIVER REMINDER'), 'Individual reminder button must use the protected endpoint contract.');
 assert.ok(adminWaiver.includes('/admin-event-day.html'), 'Main admin must expose a link to the dedicated Event Day Ready page.');
 assert.ok(!adminWaiver.includes('Final command center.'), 'Main admin must no longer render Event Day Ready inline.');
+assert.ok(adminWaiver.includes('__nocturneAdminGateUiInitialized'), 'Waiver admin enhancement must be idempotent when loaded through more than one cache-busted module URL.');
+assert.ok(adminWaiver.includes('dedupeWaiverTools'), 'Waiver admin enhancement must remove duplicate outreach panels if an older cached loader runs later.');
+assert.ok(adminLoader.includes('__nocturneAdminGateEnhancementLoaded'), 'Ticket-source loader must load the gate/waiver enhancement only once.');
 
 assert.ok(adminEventDayHtml.includes('Event Day Ready'), 'Dedicated page must visibly identify Event Day Ready.');
 assert.ok(adminEventDay.includes("readJson('/api/admin/gate-audit')"), 'Dedicated Event Day Ready page must read the protected gate audit.');
 assert.ok(adminEventDay.includes("readJson('/api/admin/launch')"), 'Dedicated Event Day Ready page must read launch readiness.');
 for (const label of ['Gate Readiness', 'Unsigned Waivers', 'Bartender', 'Stripe', 'Backups']) assert.ok(adminEventDay.includes(label), `Event Day Ready must include ${label}.`);
 
-console.log('Waiver reminder schedule, one-day pause, individual action, badges, filter, and separated Event Day Ready regressions passed.');
+console.log('Waiver reminder schedule, one-day pause, duplicate-panel guard, individual action, badges, filter, and separated Event Day Ready regressions passed.');

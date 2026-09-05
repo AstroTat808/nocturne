@@ -56,6 +56,10 @@
   refreshButton?.addEventListener('click',()=>scheduleRefresh(350)); scheduleRefresh(50);
 })();
 
-import('/assets/js/admin-gate.js?v=20260905c').catch((error) => {
-  console.warn('NOCTURNE gate/waiver admin enhancement unavailable:', error);
-});
+if (!window.__nocturneAdminGateEnhancementLoaded) {
+  window.__nocturneAdminGateEnhancementLoaded = true;
+  import('/assets/js/admin-gate.js?v=20260905d').catch((error) => {
+    window.__nocturneAdminGateEnhancementLoaded = false;
+    console.warn('NOCTURNE gate/waiver admin enhancement unavailable:', error);
+  });
+}
