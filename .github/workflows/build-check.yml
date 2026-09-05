@@ -2,7 +2,7 @@ name: Verify NOCTURNE build
 
 on:
   push:
-    branches: [main]
+    branches: [main, event-day-final-hardening]
   workflow_dispatch:
 
 permissions:
