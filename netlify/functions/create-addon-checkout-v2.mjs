@@ -23,7 +23,10 @@ async function parse(req) {
 }
 function rebuild(req, parsed) {
   const headers = new Headers(req.headers); headers.delete('content-length');
-  if (parsed.form) return new Request(req.url, { method: req.method, headers, body: parsed.form });
+  if (parsed.form) {
+    headers.delete('content-type');
+    return new Request(req.url, { method: req.method, headers, body: parsed.form });
+  }
   return new Request(req.url, { method: req.method, headers, body: parsed.raw });
 }
 async function stripeSession(id) {
@@ -32,8 +35,12 @@ async function stripeSession(id) {
   const data = await response.json().catch(() => null); return response.ok ? data : null;
 }
 async function expire(id) {
-  if (!id || !process.env.STRIPE_SECRET_KEY) return;
-  await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(id)}/expire`, { method: 'POST', headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams() }).catch(() => {});
+  if (!id || !process.env.STRIPE_SECRET_KEY) return false;
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(id)}/expire`, { method: 'POST', headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams() }).catch(() => null);
+  if (!response) return false;
+  if (response.ok) return true;
+  const data = await response.json().catch(() => null);
+  return response.status === 400 && ['expired', 'complete'].includes(String(data?.error?.checkout_session?.status || ''));
 }
 
 export default async (req) => {
@@ -57,8 +64,10 @@ export default async (req) => {
     if (!item.chosen || summary[`${item.prefix}Purchased`] || summary[`${item.prefix}CheckoutStatus`] !== 'checkout_created') continue;
     const id = summary[`${item.prefix}CheckoutSessionId`];
     const session = await stripeSession(id);
-    if (session?.payment_status === 'paid' || session?.status === 'complete') continue;
-    if (session?.status === 'open') await expire(id);
+    if (!session) continue;
+    if (session.payment_status === 'paid' || session.status === 'complete') continue;
+    if (!['open', 'expired'].includes(String(session.status || ''))) continue;
+    if (session.status === 'open' && !(await expire(id))) continue;
     if (item.prefix === 'lateStay') await releaseLateStayReservation({ slot: summary.lateStaySlot, reservationId: summary.lateStayReservationId, reason: 'replaced_by_combined_checkout' }).catch(() => {});
     patch[`${item.prefix}CheckoutStatus`] = 'replaced';
     patch[`${item.prefix}CheckoutUrl`] = null;
