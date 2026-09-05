@@ -1,5 +1,5 @@
 (() => {
-  const DELETE_API = '/.netlify/functions/admin-delete-application-v2';
+  const DELETE_API = '/api/admin/delete-application';
   const nativeRenderDetail = renderDetail;
 
   function applicationStats() {
@@ -62,6 +62,10 @@
       || ticket.drinkPackageRefundId
       || ticket.waterPackageCheckoutSessionId
       || ticket.waterPackagePaymentIntentId
+      || ticket.lateStayCheckoutSessionId
+      || ticket.lateStayPaymentIntentId
+      || ticket.addonBundleCheckoutSessionId
+      || ticket.addonBundlePaymentIntentId
     );
     const canDeleteComp = isComp
       && ticketState(application) === 'paid'
@@ -70,7 +74,7 @@
     const hasTicketActivity = ticketState(application) !== 'none' && !canDeleteComp;
 
     if (hasTicketActivity) {
-      note.textContent = 'This applicant has ticket, payment, or admission activity. You may force-revoke the ticket and delete the applicant record. Any drink/water entitlement is invalidated immediately. Minimal financial/admission identifiers are retained for accounting and audit. No refund is issued by this action.';
+      note.textContent = 'This applicant has ticket, payment, or admission activity. You may force-revoke the ticket and delete the applicant record. Any add-on entitlement is invalidated immediately. Minimal financial/admission identifiers are retained for accounting and audit. No refund is issued by this action.';
       const button = actionButton('Force Revoke & Delete', async () => {
         const expected = String(application.email || '').trim();
         if (!expected) {
@@ -80,7 +84,7 @@
 
         const typedEmail = window.prompt(
           `FORCE REVOKE AND DELETE ${application.fullName || 'this applicant'}?\n\n` +
-          'This immediately invalidates admission and package access, even if the ticket was already checked in. It does NOT issue a refund. Minimal accounting/audit data will remain.\n\n' +
+          'This immediately invalidates admission and add-on access, even if the ticket was already checked in. It does NOT issue a refund. Minimal accounting/audit data will remain.\n\n' +
           `Type the applicant email exactly to continue:\n${expected}`
         );
         if (typedEmail === null) return;
