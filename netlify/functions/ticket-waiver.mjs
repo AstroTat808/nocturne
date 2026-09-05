@@ -15,7 +15,27 @@ function clientIp(req){return String(req.headers.get('x-nf-client-connection-ip'
 function ipHash(req){const ip=clientIp(req);return ip?createHash('sha256').update(`nocturne-waiver:${ip}`).digest('hex'):'';}
 function formValue(form,name){return clean(form.get(name)||'',200);}
 function checked(form,name){return ['1','true','yes','on'].includes(String(form.get(name)||'').toLowerCase());}
-function allowedOrigin(req){const origin=req.headers.get('origin');if(!origin)return true;const allowed=new Set(['https://nocturnefestival.com','https://www.nocturnefestival.com']);try{allowed.add(new URL(req.url).origin);}catch{}for(const value of[process.env.NOCTURNE_SITE_URL,process.env.URL,process.env.DEPLOY_PRIME_URL]){try{if(value)allowed.add(new URL(value).origin);}catch{}}return allowed.has(origin);}
+
+export function trustedWaiverSubmission(req){
+  const fetchSite=String(req.headers.get('sec-fetch-site')||'').trim().toLowerCase();
+  if(fetchSite){
+    if(fetchSite==='cross-site')return false;
+    if(['same-origin','same-site','none'].includes(fetchSite))return true;
+  }
+
+  const origin=String(req.headers.get('origin')||'').trim();
+  if(!origin)return true;
+  let normalizedOrigin='';
+  try{normalizedOrigin=new URL(origin).origin;}catch{return false;}
+
+  const allowed=new Set(['https://nocturnefestival.com','https://www.nocturnefestival.com']);
+  try{allowed.add(new URL(req.url).origin);}catch{}
+  const env=globalThis.Netlify?.env;
+  for(const key of ['NOCTURNE_SITE_URL','URL','DEPLOY_PRIME_URL']){
+    try{const value=env?.get?.(key);if(value)allowed.add(new URL(value).origin);}catch{}
+  }
+  return allowed.has(normalizedOrigin);
+}
 
 function page({token='',ticketId='',participantName='',signed=false,signedAt='',signerName='',error=''}){
   const text=WAIVER_TEXT.split('\n').map((p)=>p?`<p>${esc(p)}</p>`:'').join('');
@@ -38,7 +58,7 @@ async function load(parsed){const orderStore=getStore({name:ORDER_STORE,consiste
 
 export default async(req)=>{
   if(!['GET','POST'].includes(req.method))return new Response('Method not allowed.',{status:405});
-  if(req.method==='POST'&&!allowedOrigin(req))return new Response(page({error:'Request origin was not allowed.'}),{status:403,headers:headers()});
+  if(req.method==='POST'&&!trustedWaiverSubmission(req))return new Response(page({error:'Request origin was not allowed.'}),{status:403,headers:headers()});
   const url=new URL(req.url);let token=String(url.searchParams.get('token')||'').trim();let form=null;
   if(req.method==='POST'){try{form=await req.formData();token=formValue(form,'token');}catch{return new Response(page({error:'Waiver submission could not be read.'}),{status:400,headers:headers()});}}
   const parsed=verifyTicketToken(token);if(!parsed)return new Response(page({error:'This ticket link is invalid.'}),{status:400,headers:headers()});
