@@ -2,6 +2,16 @@
   const dashboard = document.querySelector('#admin-dashboard');
   if (!dashboard) return;
 
+  const nav = dashboard.querySelector('.admin-operations-nav');
+  if (nav && !nav.querySelector('[data-event-day-ready-link]')) {
+    const link = document.createElement('a');
+    link.className = 'admin-operation-card primary';
+    link.href = '/admin-event-day.html';
+    link.dataset.eventDayReadyLink = 'true';
+    link.innerHTML = '<strong>Event Day Ready</strong><span>Gate audit, waivers, Stripe, bar & backups →</span>';
+    nav.insertBefore(link, nav.firstChild);
+  }
+
   const style = document.createElement('style');
   style.textContent = `
     .admin-waiver-badge{display:inline-flex;align-items:center;width:max-content;margin-top:.35rem;padding:.24rem .48rem;border:1px solid;border-radius:999px;font-size:.58rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;line-height:1}
@@ -15,7 +25,6 @@
   const waiverTools = document.createElement('section');
   waiverTools.className = 'admin-waiver-tools';
   waiverTools.innerHTML = `<div><p class="admin-kicker">Required waiver outreach</p><h2>Unsigned waiver reminders.</h2><p class="admin-muted">Daily reminders run at 8:00 AM HST until the event. You can also send all eligible unsigned guests now, or send one reminder directly from an unsigned ticket row.</p></div><div class="admin-waiver-actions"><button id="admin-waiver-remind" class="btn" type="button">Send Waiver Reminders →</button><p id="admin-waiver-reminder-status" class="admin-status" role="status" aria-live="polite">Loading unsigned count…</p><p class="admin-waiver-note">Only active tickets are targeted. Signed, refunded, disputed, and inactive tickets are excluded. Manual duplicate sends are suppressed for two hours.</p></div>`;
-  const nav = dashboard.querySelector('.admin-operations-nav');
   if (nav) nav.insertAdjacentElement('afterend', waiverTools);
   else dashboard.prepend(waiverTools);
 
