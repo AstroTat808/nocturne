@@ -1,7 +1,8 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { verifyTicketToken } from './_ticket-token.mjs';
+import { verifyTicketToken, makeTicketToken } from './_ticket-token.mjs';
 import { gateReadiness } from './_gate-readiness.mjs';
+import { waiverSigned } from './_waiver.mjs';
 import { writeAudit } from './_audit.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
@@ -23,6 +24,45 @@ function clearCookie() { return `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=
 async function body(req) { try { return await req.json(); } catch { return null; } }
 function tokenFromInput(value = '') { const raw = String(value).trim(); if (!raw) return ''; try { return new URL(raw).searchParams.get('token') || ''; } catch { return raw; } }
 function entitlements(summary = {}) { return { drinkPackage: { purchased: Boolean(summary.drinkPackagePurchased), status: summary.drinkPackageStatus || null, creditsPurchased: Number(summary.drinkCreditsPurchased || 0), creditsRemaining: Number(summary.drinkCreditsRemaining || 0) }, waterPackage: { purchased: Boolean(summary.waterPackagePurchased), status: summary.waterPackageStatus || null }, lateStay: { purchased: Boolean(summary.lateStayPurchased), status: summary.lateStayStatus || null, departureTime: summary.lateStayDepartureTime || null } }; }
+function siteBase(req){return String(process.env.NOCTURNE_SITE_URL||new URL(req.url).origin).replace(/\/$/,'');}
+
+async function emergencyLookup(req, inputData) {
+  const query = String(inputData.query || '').trim().toLowerCase();
+  if (query.length < 3) return json({ error: 'Enter at least 3 characters of the guest name or email.' }, 400);
+  const applicationStore = getStore({ name: APPLICATION_STORE, consistency: 'strong' });
+  const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
+  const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
+  const { blobs } = await applicationStore.list();
+  const matches = [];
+  for (const { key: submissionId } of blobs) {
+    if (matches.length >= 10) break;
+    const application = await applicationStore.get(submissionId, { type: 'json', consistency: 'strong' });
+    if (!application) continue;
+    const haystack = `${application.fullName || ''} ${application.preferredName || ''} ${application.email || ''}`.toLowerCase();
+    if (!haystack.includes(query)) continue;
+    const [summary, review] = await Promise.all([
+      orderStore.get(`submission-${submissionId}`, { type: 'json', consistency: 'strong' }),
+      reviewStore.get(submissionId, { type: 'json', consistency: 'strong' })
+    ]);
+    if (!summary?.ticketId || summary.status !== 'paid' || !['paid','checked_in'].includes(String(review?.ticketState || ''))) continue;
+    const token = makeTicketToken(summary.ticketId, submissionId);
+    if (!token) continue;
+    const base = siteBase(req);
+    matches.push({
+      submissionId,
+      ticketId: summary.ticketId,
+      guestName: application.preferredName || application.fullName || 'NOCTURNE Guest',
+      email: application.email || '',
+      ticketSource: summary.ticketSource === 'comp' ? 'comp' : 'paid',
+      checkedInAt: summary.checkedInAt || null,
+      waiverSigned: waiverSigned(summary, review),
+      ticketUrl: `${base}/ticket?token=${encodeURIComponent(token)}`,
+      waiverUrl: `${base}/ticket/waiver?token=${encodeURIComponent(token)}`
+    });
+  }
+  await writeAudit('gate.emergency_lookup', { queryLength: query.length, matchCount: matches.length });
+  return json({ ok: true, matches });
+}
 
 async function checkIn(req, input) {
   const token = tokenFromInput(input.token || input.value || '');
@@ -41,8 +81,9 @@ async function checkIn(req, input) {
   const summary = summaryEntry?.data;
   const gate = gateReadiness(summary, review, parsed.ticketId);
   if (!gate.ready) {
+    const waiverOnly = gate.errors.length === 1 && gate.errors[0].includes('waiver');
     console.error('NOCTURNE gate readiness rejection:', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, errors: gate.errors });
-    return json({ ok: false, result: 'invalid', message: 'INVALID OR INACTIVE TICKET' }, 403);
+    return json({ ok: false, result: 'invalid', code: waiverOnly ? 'waiver_required' : 'ticket_not_ready', message: waiverOnly ? 'WAIVER REQUIRED — HAVE GUEST SIGN BEFORE ENTRY' : 'INVALID OR INACTIVE TICKET', waiverUrl: waiverOnly ? `${siteBase(req)}/ticket/waiver?token=${encodeURIComponent(token)}` : null, issues: gate.errors }, 403);
   }
 
   const guestName = application?.preferredName || application?.fullName || 'NOCTURNE Guest';
@@ -63,7 +104,7 @@ async function checkIn(req, input) {
     if (review) await reviewStore.setJSON(parsed.submissionId, { ...review, ticketState: 'checked_in', checkedInAt, updatedAt: checkedInAt });
   } catch (error) { console.error('NOCTURNE secondary check-in sync failed:', error); }
 
-  await writeAudit('ticket.checked_in', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, guestName, ticketSource: gate.source });
+  await writeAudit('ticket.checked_in', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, guestName, ticketSource: gate.source, waiverVersion: summary.waiverVersion || null });
   return json({ ok: true, result: 'valid', message: 'VALID — CHECKED IN', ticketId: parsed.ticketId, guestName, checkedInAt, ticketSource: gate.source, entitlements: entitlements(summary) });
 }
 
@@ -75,5 +116,6 @@ export default async (req) => {
   if (action === 'login') { if (!key() || !secret()) return json({ error: 'Check-in authentication is not configured.' }, 500); if (!safeEqual(input.password || '', key())) return json({ error: 'Invalid check-in password.' }, 401); return json({ ok: true }, 200, { 'Set-Cookie': setCookie(makeSession()) }); }
   if (action === 'logout') return json({ ok: true }, 200, { 'Set-Cookie': clearCookie() });
   if (!authenticated(req)) return json({ error: 'Unauthorized.' }, 401);
+  if (action === 'lookup-guest') return emergencyLookup(req, input);
   return checkIn(req, input);
 };
