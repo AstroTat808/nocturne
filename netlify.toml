@@ -35,7 +35,7 @@
 
 [[redirects]]
   from = "/api/stripe/webhook"
-  to = "/.netlify/functions/stripe-webhook-router"
+  to = "/.netlify/functions/stripe-webhook-router-v2"
   status = 200
   force = true
 
@@ -155,25 +155,43 @@
 
 [[redirects]]
   from = "/ticket-access/checkout"
-  to = "/.netlify/functions/create-checkout"
+  to = "/.netlify/functions/create-checkout-v2"
   status = 200
   force = true
 
 [[redirects]]
   from = "/ticket-access"
-  to = "/.netlify/functions/ticket-access"
+  to = "/.netlify/functions/ticket-access-v2"
   status = 200
   force = true
 
 [[redirects]]
   from = "/ticket-confirmed"
-  to = "/.netlify/functions/ticket-confirmed"
+  to = "/.netlify/functions/ticket-confirmed-v2"
   status = 200
   force = true
 
 [[redirects]]
   from = "/ticket/qr"
   to = "/.netlify/functions/ticket-qr"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/addons/checkout"
+  to = "/.netlify/functions/create-addon-checkout-v2"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/addons/confirmed"
+  to = "/.netlify/functions/addon-bundle-confirmed"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ticket/addons"
+  to = "/.netlify/functions/ticket-addons"
   status = 200
   force = true
 
@@ -203,13 +221,13 @@
 
 [[redirects]]
   from = "/ticket/late-stay/checkout"
-  to = "/.netlify/functions/create-late-stay-checkout"
+  to = "/.netlify/functions/create-late-stay-checkout-v2"
   status = 200
   force = true
 
 [[redirects]]
   from = "/ticket/late-stay/confirmed"
-  to = "/.netlify/functions/late-stay-confirmed"
+  to = "/.netlify/functions/late-stay-confirmed-v2"
   status = 200
   force = true
 
@@ -221,7 +239,7 @@
 
 [[redirects]]
   from = "/ticket"
-  to = "/.netlify/functions/ticket-view"
+  to = "/.netlify/functions/ticket-view-v2"
   status = 200
   force = true
 
