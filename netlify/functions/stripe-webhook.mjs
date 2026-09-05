@@ -9,8 +9,8 @@ const POLICY_TEXT = 'FINAL SALE / NON-REFUNDABLE: NOCTURNE optional add-ons cann
 const POLICY_HTML = `<p style="margin:20px 0;color:#ffca61;font-size:12px;line-height:1.7"><strong>FINAL SALE / NON-REFUNDABLE:</strong> NOCTURNE optional add-ons cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash, including unused or unredeemed benefits.</p>`;
 const WATER_TEXT = 'Water package: Unlimited Drinking Water · registered ticket holder only';
 const WATER_HTML = '<br><strong>Water package:</strong> Unlimited Drinking Water · registered ticket holder only';
-const LATE_STAY_TEXT = 'Late Checkout / Car Camping: Stay on the property until 8:00 AM · registered ticket holder only';
-const LATE_STAY_HTML = '<br><strong>Late Checkout / Car Camping:</strong> Stay on the property until 8:00 AM · registered ticket holder only';
+const LATE_STAY_TEXT = 'Late Checkout / Car Camping: Stay on the property until 10:00 AM · registered ticket holder only';
+const LATE_STAY_HTML = '<br><strong>Late Checkout / Car Camping:</strong> Stay on the property until 10:00 AM · registered ticket holder only';
 const PURCHASE_SUMMARY_HTML_MARKER = '<div style="margin:28px 0;padding:18px;border-left:2px solid #d89a2b;background:#020202;color:#d8c7ac;line-height:1.8">';
 
 const DUPLICATE_REASONS = new Set(['duplicate', 'existing_active_ticket', 'concurrent_payment', 'existing_drink_package']);
@@ -132,7 +132,7 @@ function bundledLateStayEvent(event) {
     ['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(String(event?.type || ''))
     && session?.payment_status === 'paid'
     && String(session?.metadata?.purchaseType || '') !== 'late-stay-addon'
-    && String(session?.metadata?.lateStay || '') === 'until-8am'
+    && ['until-8am', 'until-10am'].includes(String(session?.metadata?.lateStay || ''))
   );
 }
 
@@ -199,10 +199,10 @@ async function fulfillBundledLateStay(event) {
   if (!sessionOrder || sessionOrder.status !== 'paid' || !sessionOrder.lateStayRequested) throw new Error('Bundled Late Checkout / Car Camping record is unavailable after ticket payment.');
   const slot = Number(session.metadata?.lateStaySlot || sessionOrder.lateStaySlot || 0);
   const reservationId = String(session.metadata?.lateStayReservationId || sessionOrder.lateStayReservationId || '');
-  if (!slot || !reservationId) throw new Error('Bundled Late Checkout / Car Camping is missing its capacity reservation.');
+  if (!slot || !reservationId) throw new Error('Bundled Late Checkout / Car Camping is missing its tracking reservation.');
   const paidAt = sessionOrder.paidAt || new Date().toISOString();
   const sold = await markLateStaySold({ slot, reservationId, submissionId, ticketId: sessionOrder.ticketId || null, sessionId: session.id, paidAt });
-  if (!sold) throw new Error('Bundled Late Checkout / Car Camping capacity slot could not be finalized.');
+  if (!sold) throw new Error('Bundled Late Checkout / Car Camping tracking record could not be finalized.');
   const fields = lateStayFields({
     sessionId: session.id,
     paymentIntentId: session.payment_intent || sessionOrder.stripePaymentIntentId || null,
