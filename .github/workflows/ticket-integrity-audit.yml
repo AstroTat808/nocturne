@@ -47,38 +47,70 @@ jobs:
           data = json.loads(Path('audit.json').read_text())
           s = data.get('summary', {})
           lines = [
-              '### NOCTURNE ticket integrity audit',
+              '### NOCTURNE deep ticket integrity audit',
               '',
               f"- Active digital tickets audited: **{s.get('activeTickets', 0)}**",
               f"- Paid: **{s.get('paidTickets', 0)}** · Comp: **{s.get('compTickets', 0)}**",
-              f"- Signed waivers: **{s.get('signedWaivers', 0)}** · Unsigned/QR locked: **{s.get('unsignedWaivers', 0)}**",
+              f"- Structurally valid ticket records: **{s.get('structurallyValidTickets', 0)} / {s.get('activeTickets', 0)}**",
+              f"- Structurally broken ticket records: **{s.get('structurallyBrokenTickets', 0)}**",
+              f"- Signed waivers: **{s.get('signedWaivers', 0)}** · Unsigned: **{s.get('unsignedWaivers', 0)}**",
+              f"- Ready for first-entry scan now: **{s.get('scanReadyForFirstEntry', 0)}**",
+              f"- Unsigned tickets valid except for required waiver: **{s.get('unsignedTicketsOnlyBlockedByWaiver', 0)} / {s.get('unsignedWaivers', 0)}**",
+              f"- Already checked in: **{s.get('alreadyCheckedIn', 0)}**",
               f"- Production ticket pages returning 200: **{s.get('ticketPages200', 0)} / {s.get('activeTickets', 0)}**",
               f"- Signed-waiver QR endpoints returning 200: **{s.get('signedQr200', 0)} / {s.get('signedWaivers', 0)}**",
               f"- Unsigned-waiver QR endpoints correctly locked at 403: **{s.get('unsignedQrLocked403', 0)} / {s.get('unsignedWaivers', 0)}**",
+              f"- Paid admissions verified against Stripe: **{s.get('paidAdmissionPaymentsVerified', 0)} / {s.get('paidTickets', 0)}**",
+              f"- Comp admission records verified: **{s.get('compAdmissionRecordsVerified', 0)} / {s.get('compTickets', 0)}**",
               f"- Tickets with any add-on: **{s.get('ticketsWithAnyAddon', 0)}**",
-              f"- Six-Drink packages: **{s.get('drinkPackages', 0)}** · Water: **{s.get('waterPackages', 0)}** · Late Stay: **{s.get('lateStayPackages', 0)}**",
-              f"- Records with blocking integrity errors: **{s.get('brokenOrBlocked', 0)}**",
-              f"- Records with warnings: **{s.get('withWarnings', 0)}**",
-              f"- Overall blocking integrity result: **{'PASS' if s.get('allIntegrityChecksPass') else 'FAIL'}**",
+              f"- Add-on tickets fully verified: **{s.get('addonTicketsFullyVerified', 0)} / {s.get('ticketsWithAnyAddon', 0)}**",
+              f"- Six-Drink packages: **{s.get('drinkPackages', 0)}** · production bar lookups verified: **{s.get('drinkPackagesBarLookupVerified', 0)}**",
+              f"- Water packages: **{s.get('waterPackages', 0)}** · production entitlement lookups verified: **{s.get('waterPackagesEndpointVerified', 0)}**",
+              f"- Late Stay packages: **{s.get('lateStayPackages', 0)}** · production entitlement lookups verified: **{s.get('lateStayPackagesEndpointVerified', 0)}**",
+              f"- Overall ticket-record integrity: **{'PASS' if s.get('allTicketRecordsValid') else 'FAIL'}**",
+              f"- All paid admission payments verified: **{'PASS' if s.get('allPaidAdmissionsStripeVerified') else 'FAIL'}**",
+              f"- All comp admissions verified: **{'PASS' if s.get('allCompAdmissionsInternallyVerified') else 'FAIL'}**",
+              f"- All add-on tickets verified: **{'PASS' if s.get('allAddonTicketsFullyVerified') else 'FAIL'}**",
           ]
 
           error_codes = Counter()
+          blocker_codes = Counter()
           warning_codes = Counter()
           for row in data.get('rows', []):
               for issue in row.get('issues', []):
-                  if issue.get('severity') == 'error':
-                      error_codes[issue.get('code', 'unknown')] += 1
-                  elif issue.get('severity') == 'warning':
-                      warning_codes[issue.get('code', 'unknown')] += 1
+                  severity = issue.get('severity')
+                  code = issue.get('code', 'unknown')
+                  if severity == 'error': error_codes[code] += 1
+                  elif severity == 'blocker': blocker_codes[code] += 1
+                  elif severity == 'warning': warning_codes[code] += 1
           if error_codes:
-              lines += ['', '**Blocking issue codes**']
+              lines += ['', '**Structural/blocking error codes**']
               lines += [f"- `{code}`: {count}" for code, count in sorted(error_codes.items())]
+          if blocker_codes:
+              lines += ['', '**Expected scan blockers**']
+              lines += [f"- `{code}`: {count}" for code, count in sorted(blocker_codes.items())]
           if warning_codes:
               lines += ['', '**Warning codes**']
               lines += [f"- `{code}`: {count}" for code, count in sorted(warning_codes.items())]
 
+          status_counts = Counter()
+          for row in data.get('rows', []):
+              if row.get('addons', {}).get('drink'): status_counts[f"drink:{row.get('drinkStatus') or 'missing'}"] += 1
+              if row.get('addons', {}).get('water'): status_counts[f"water:{row.get('waterStatus') or 'missing'}"] += 1
+              if row.get('addons', {}).get('lateStay'): status_counts[f"lateStay:{row.get('lateStayStatus') or 'missing'}"] += 1
+          if status_counts:
+              lines += ['', '**Add-on status distribution**']
+              lines += [f"- `{name}`: {count}" for name, count in sorted(status_counts.items())]
+
           Path('audit-comment.md').write_text('\n'.join(lines) + '\n')
-          Path('audit-summary.json').write_text(json.dumps({'generatedAt': data.get('generatedAt'), 'summary': s, 'errorCodes': error_codes, 'warningCodes': warning_codes}, indent=2, default=dict))
+          Path('audit-summary.json').write_text(json.dumps({
+              'generatedAt': data.get('generatedAt'),
+              'summary': s,
+              'errorCodes': dict(error_codes),
+              'blockerCodes': dict(blocker_codes),
+              'warningCodes': dict(warning_codes),
+              'addonStatusCounts': dict(status_counts)
+          }, indent=2))
           PY
           cat audit-comment.md >> "$GITHUB_STEP_SUMMARY"
 
