@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { dailyRemindersPaused } from '../netlify/functions/_reminder-policy.mjs';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
 const audit = read('netlify/functions/admin-gate-audit.mjs');
 const reminder = read('netlify/functions/admin-waiver-reminders.mjs');
 const daily = read('netlify/functions/daily-waiver-reminders.mjs');
+const dailyInvite = read('netlify/functions/daily-invite-reminders.mjs');
+const dailyPurchase = read('netlify/functions/daily-purchase-reminders.mjs');
 const email = read('netlify/functions/_waiver-reminder-email.mjs');
 const adminWaiver = read('site/assets/js/admin-gate.js');
 const adminEventDay = read('site/assets/js/admin-event-day.js');
@@ -23,6 +26,12 @@ assert.ok(reminder.includes('SEND WAIVER REMINDERS'), 'Bulk reminder endpoint mu
 assert.ok(reminder.includes('SEND WAIVER REMINDER'), 'Individual reminder endpoint must require an individual confirmation phrase.');
 assert.ok(reminder.includes('waiver.individual_reminder_sent'), 'Individual waiver sends must be audited.');
 assert.ok(reminder.includes("writeAudit('waiver.bulk_reminders_sent'"), 'Bulk waiver sends must be audited.');
+
+assert.equal(dailyRemindersPaused(new Date('2026-09-05T18:00:00Z')), true, 'Scheduled reminders must be paused on Sept. 5 in Hawai‘i.');
+assert.equal(dailyRemindersPaused(new Date('2026-09-06T18:00:00Z')), false, 'Scheduled reminders must automatically resume on Sept. 6 in Hawai‘i.');
+for (const source of [daily, dailyInvite, dailyPurchase]) {
+  assert.ok(source.includes("trigger === 'schedule' && dailyRemindersPaused()"), 'Each scheduled reminder job must honor the one-day pause without blocking manual sends.');
+}
 
 assert.ok(daily.includes("schedule: '0 18 * * *'"), 'Daily waiver reminder must run at 8:00 AM HST.');
 assert.ok(daily.includes('beforeEvent()'), 'Daily waiver reminders must stop after event start.');
@@ -48,4 +57,4 @@ assert.ok(adminEventDay.includes("readJson('/api/admin/gate-audit')"), 'Dedicate
 assert.ok(adminEventDay.includes("readJson('/api/admin/launch')"), 'Dedicated Event Day Ready page must read launch readiness.');
 for (const label of ['Gate Readiness', 'Unsigned Waivers', 'Bartender', 'Stripe', 'Backups']) assert.ok(adminEventDay.includes(label), `Event Day Ready must include ${label}.`);
 
-console.log('Waiver reminder schedule, individual action, badges, filter, and separated Event Day Ready regressions passed.');
+console.log('Waiver reminder schedule, one-day pause, individual action, badges, filter, and separated Event Day Ready regressions passed.');
