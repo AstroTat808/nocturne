@@ -3,9 +3,12 @@ import createCheckout, { appendBundledAddOnLineItems, browserFormPost, checkoutI
 import { browserAddonCheckout, browserAddonFormPost } from '../netlify/functions/_browser-addon-checkout.mjs';
 
 const checkoutUrl = 'https://nocturnefestival.com/ticket-access/checkout';
-const browserRequest = (body = '', url = checkoutUrl) => new Request(url, {
+const browserRequest = (body = '', url = checkoutUrl, origin = '') => new Request(url, {
   method: 'POST',
-  headers: { 'content-type': 'application/x-www-form-urlencoded' },
+  headers: {
+    'content-type': 'application/x-www-form-urlencoded',
+    ...(origin ? { origin } : {})
+  },
   body
 });
 
@@ -71,15 +74,34 @@ async function verifyStandaloneAddon({ path, formPolicyField, jsonPolicyField, e
   let received = null;
   const legacyHandler = async (req) => {
     assert.equal(req.headers.get('content-type'), 'application/json', `${path} must normalize browser forms to JSON before the existing secure handler.`);
+    assert.equal(req.headers.get('origin'), null, `${path} must remove the already-validated public Origin before invoking the rewritten internal handler.`);
     received = await req.json();
     return Response.json({ ok: true, checkoutUrl: stripeUrl });
   };
-  const req = browserRequest(`token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`, `https://nocturnefestival.com${path}`);
-  assert.equal(browserAddonFormPost(req), true);
-  const response = await browserAddonCheckout(req, legacyHandler, { formPolicyField, jsonPolicyField, errorPath });
-  assert.deepEqual(received, { token, [jsonPolicyField]: true }, `${path} must preserve the digital-ticket token and policy acknowledgment.`);
-  assert.equal(response.status, 303, `${path} browser form must redirect to Stripe Checkout.`);
-  assert.equal(response.headers.get('location'), stripeUrl, `${path} must redirect to the Stripe Checkout URL returned by the existing handler.`);
+  const previousSiteUrl = process.env.NOCTURNE_SITE_URL;
+  process.env.NOCTURNE_SITE_URL = 'https://nocturnefestival.com';
+  try {
+    const internalFunctionUrl = `https://internal-function-host.netlify.app${path}`;
+    const req = browserRequest(`token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`, internalFunctionUrl, 'https://nocturnefestival.com');
+    assert.equal(browserAddonFormPost(req), true);
+    const response = await browserAddonCheckout(req, legacyHandler, { formPolicyField, jsonPolicyField, errorPath });
+    assert.deepEqual(received, { token, [jsonPolicyField]: true }, `${path} must preserve the digital-ticket token and policy acknowledgment.`);
+    assert.equal(response.status, 303, `${path} browser form must redirect to Stripe Checkout.`);
+    assert.equal(response.headers.get('location'), stripeUrl, `${path} must redirect to the Stripe Checkout URL returned by the existing handler.`);
+
+    let maliciousHandlerCalled = false;
+    const blocked = await browserAddonCheckout(
+      browserRequest(`token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`, internalFunctionUrl, 'https://evil.example'),
+      async () => { maliciousHandlerCalled = true; return Response.json({ ok: true, checkoutUrl: stripeUrl }); },
+      { formPolicyField, jsonPolicyField, errorPath }
+    );
+    assert.equal(maliciousHandlerCalled, false, `${path} must reject an untrusted browser Origin before the checkout handler runs.`);
+    assert.equal(blocked.status, 303);
+    assert.match(blocked.headers.get('location') || '', /Origin%20not%20allowed/);
+  } finally {
+    if (previousSiteUrl === undefined) delete process.env.NOCTURNE_SITE_URL;
+    else process.env.NOCTURNE_SITE_URL = previousSiteUrl;
+  }
 }
 
 await verifyStandaloneAddon({
@@ -101,4 +123,4 @@ await verifyStandaloneAddon({
   errorPath: '/ticket/late-stay/confirmed'
 });
 
-console.log('Shared admission checkout and standalone ticket add-on browser-form regression tests passed.');
+console.log('Shared admission checkout and standalone ticket add-on browser-form/origin regression tests passed.');
