@@ -26,16 +26,5 @@ export default async (req) => {
 
   if (await handleAddonPaymentTransition(event)) return Response.json({ received: true, addonPaymentTransition: true });
 
-  const previousFetch = globalThis.fetch;
-  globalThis.fetch = async (input, init = {}) => {
-    if (String(input) === 'https://api.resend.com/emails' && typeof init?.body === 'string') {
-      init = { ...init, body: init.body.replaceAll('8:00 AM', '10:00 AM').replaceAll('until 8:00 AM', 'until 10:00 AM').replaceAll('Stay until<br>8:00 AM.', 'Stay until<br>10:00 AM.') };
-    }
-    return previousFetch(input, init);
-  };
-  try {
-    return await legacyRouter(new Request(req.url, { method: 'POST', headers: req.headers, body: rawBody }));
-  } finally {
-    globalThis.fetch = previousFetch;
-  }
+  return legacyRouter(new Request(req.url, { method: 'POST', headers: req.headers, body: rawBody }));
 };
