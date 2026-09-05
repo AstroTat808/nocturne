@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import createCheckout, { appendBundledAddOnLineItems, browserFormPost, checkoutInput } from '../netlify/functions/create-checkout.mjs';
+import { browserAddonCheckout, browserAddonFormPost } from '../netlify/functions/_browser-addon-checkout.mjs';
 
 const checkoutUrl = 'https://nocturnefestival.com/ticket-access/checkout';
-const browserRequest = (body = '') => new Request(checkoutUrl, {
+const browserRequest = (body = '', url = checkoutUrl) => new Request(url, {
   method: 'POST',
   headers: { 'content-type': 'application/x-www-form-urlencoded' },
   body
@@ -64,4 +65,40 @@ try {
   globalThis.fetch = originalFetch;
 }
 
-console.log('Shared checkout browser-form and private-ticket regression tests passed.');
+async function verifyStandaloneAddon({ path, formPolicyField, jsonPolicyField, errorPath }) {
+  const token = 'NOC-TEST-TICKET-TOKEN';
+  const stripeUrl = `https://checkout.stripe.com/c/pay/test-${jsonPolicyField}`;
+  let received = null;
+  const legacyHandler = async (req) => {
+    assert.equal(req.headers.get('content-type'), 'application/json', `${path} must normalize browser forms to JSON before the existing secure handler.`);
+    received = await req.json();
+    return Response.json({ ok: true, checkoutUrl: stripeUrl });
+  };
+  const req = browserRequest(`token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`, `https://nocturnefestival.com${path}`);
+  assert.equal(browserAddonFormPost(req), true);
+  const response = await browserAddonCheckout(req, legacyHandler, { formPolicyField, jsonPolicyField, errorPath });
+  assert.deepEqual(received, { token, [jsonPolicyField]: true }, `${path} must preserve the digital-ticket token and policy acknowledgment.`);
+  assert.equal(response.status, 303, `${path} browser form must redirect to Stripe Checkout.`);
+  assert.equal(response.headers.get('location'), stripeUrl, `${path} must redirect to the Stripe Checkout URL returned by the existing handler.`);
+}
+
+await verifyStandaloneAddon({
+  path: '/ticket/drinks/checkout',
+  formPolicyField: 'package_policy',
+  jsonPolicyField: 'packagePolicy',
+  errorPath: '/ticket/drinks/confirmed'
+});
+await verifyStandaloneAddon({
+  path: '/ticket/water/checkout',
+  formPolicyField: 'water_policy',
+  jsonPolicyField: 'waterPolicy',
+  errorPath: '/ticket/water/confirmed'
+});
+await verifyStandaloneAddon({
+  path: '/ticket/late-stay/checkout',
+  formPolicyField: 'late_stay_policy',
+  jsonPolicyField: 'lateStayPolicy',
+  errorPath: '/ticket/late-stay/confirmed'
+});
+
+console.log('Shared admission checkout and standalone ticket add-on browser-form regression tests passed.');
