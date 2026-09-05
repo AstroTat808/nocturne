@@ -11,7 +11,7 @@ const has = (source, value, message) => check(source.includes(value), message);
 const helper = read('netlify/functions/_late-stay.mjs');
 const ticketAccess = read('netlify/functions/ticket-access.mjs');
 const checkout = read('netlify/functions/create-checkout.mjs');
-const addonCheckout = read('netlify/functions/create-late-stay-checkout.mjs');
+const addonCheckout = read('netlify/functions/_legacy-create-late-stay-checkout.mjs');
 const ticketApi = read('netlify/functions/ticket-late-stay.mjs');
 const ticketJs = read('site/assets/js/ticket-view.js');
 const webhook = read('netlify/functions/stripe-webhook.mjs');
