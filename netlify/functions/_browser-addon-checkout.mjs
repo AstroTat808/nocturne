@@ -13,6 +13,14 @@ function accepted(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
 }
 
+function publicSiteOrigin(req) {
+  const configured = String(process.env.NOCTURNE_SITE_URL || '').trim();
+  if (configured) {
+    try { return new URL(configured).origin; } catch {}
+  }
+  return new URL(req.url).origin;
+}
+
 export function browserAddonFormPost(req) {
   const type = (req.headers.get('content-type') || '').toLowerCase();
   return type.includes('application/x-www-form-urlencoded') || type.includes('multipart/form-data');
@@ -32,6 +40,11 @@ async function formValues(req) {
 export async function browserAddonCheckout(req, legacyHandler, { formPolicyField, jsonPolicyField, errorPath }) {
   if (!browserAddonFormPost(req)) return legacyHandler(req);
 
+  const origin = String(req.headers.get('origin') || '').trim();
+  if (origin && origin !== publicSiteOrigin(req)) {
+    return redirect(`${errorPath}?error=${encodeURIComponent('Origin not allowed.')}`);
+  }
+
   let values;
   try {
     values = await formValues(req);
@@ -46,6 +59,7 @@ export async function browserAddonCheckout(req, legacyHandler, { formPolicyField
   headers.set('content-type', 'application/json');
   headers.set('accept', 'application/json');
   headers.delete('content-length');
+  headers.delete('origin');
 
   const normalized = new Request(req.url, {
     method: 'POST',
