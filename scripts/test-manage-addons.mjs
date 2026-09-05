@@ -6,6 +6,7 @@ import { lateStayAddonEligible, lateStayConfig } from '../netlify/functions/_lat
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const manager = read('netlify/functions/ticket-addons.mjs');
+const managerJs = read('site/assets/js/addon-manager.js');
 const checkout = read('netlify/functions/create-addon-checkout.mjs');
 const replacement = read('netlify/functions/create-addon-checkout-v2.mjs');
 const ticketView = read('netlify/functions/ticket-view-v2.mjs');
@@ -14,15 +15,17 @@ const transition = read('netlify/functions/_addon-payment-transition.mjs');
 const refund = read('netlify/functions/admin-admission-refund.mjs');
 const netlify = read('netlify.toml');
 
-for (const name of ['drink_package', 'water_package', 'late_stay']) {
-  assert.ok(manager.includes(`'${name}'`), `Manage Add-Ons must include ${name}.`);
-}
+for (const name of ['drink_package', 'water_package', 'late_stay']) assert.ok(manager.includes(`'${name}'`), `Manage Add-Ons must include ${name}.`);
 assert.ok(manager.includes('name="package_policy"'), 'Manage Add-Ons must include one shared package_policy acknowledgment.');
 assert.ok(manager.includes('Checkout Selected Add-Ons →'), 'Manage Add-Ons must provide a single combined checkout action.');
 assert.ok(manager.includes('new combined checkout'), 'Open unpaid standalone checkouts must be replaceable by the combined flow.');
 assert.ok(manager.includes('data-addon-total'), 'Manage Add-Ons must expose a running total.');
 assert.ok(manager.includes('MOST POPULAR'), 'Six-Drink must be prominently merchandised.');
 assert.ok(manager.includes('STAY UNTIL 10 AM'), 'Late Stay must be prominently merchandised.');
+assert.ok(manager.includes('addon-manager.js?v=20260905b'), 'Manage Add-Ons must cache-bust the responsive manager fix.');
+assert.ok(!managerJs.includes('new MutationObserver(sync)'), 'Add-on manager must not observe and rewrite its own disabled state.');
+assert.ok(managerJs.includes("addEventListener('change', sync)"), 'Add-on manager must update from user change events.');
+assert.ok(managerJs.includes('submit.disabled !== shouldDisable'), 'Submit disabled writes must be idempotent.');
 assert.ok(checkout.includes("'metadata[purchaseType]': 'addon-bundle'"), 'Combined checkout must create addon-bundle Stripe sessions.');
 assert.ok(checkout.includes('line_items['), 'Combined checkout must build Stripe line items for selected add-ons.');
 assert.ok(checkout.includes('amountTotal: total'), 'Combined checkout must persist the combined amount.');
@@ -47,4 +50,4 @@ assert.equal(lateStayConfig().departureTime, '10:00 AM', 'Late Stay must depart 
 for (const route of ['/ticket/addons', '/ticket/addons/checkout', '/ticket/addons/confirmed']) assert.ok(netlify.includes(`from = "${route}"`), `Netlify must route ${route}.`);
 assert.ok(netlify.includes('to = "/.netlify/functions/ticket-view-v2"'), 'Production ticket route must use unified digital ticket.');
 assert.ok(netlify.includes('to = "/.netlify/functions/stripe-webhook-router-v2"'), 'Production webhook route must use add-on-aware router.');
-console.log('Manage Add-Ons, comp parity, merchandising, running total, and 10am regression checks passed.');
+console.log('Manage Add-Ons, responsiveness, comp parity, merchandising, running total, and 10am regression checks passed.');
