@@ -1,7 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { waiverSigned, WAIVER_VERSION } from './_waiver.mjs';
 import { sendWaiverReminder } from './_waiver-reminder-email.mjs';
-import { beforeEvent, honoluluDate } from './_reminder-policy.mjs';
+import { beforeEvent, dailyRemindersPaused, honoluluDate } from './_reminder-policy.mjs';
 import { writeAudit } from './_audit.mjs';
 import { sendOpsAlert } from './_ops-alert.mjs';
 
@@ -85,6 +85,9 @@ async function processCandidate(submissionId, dateKey, stores) {
 }
 
 export async function runDailyWaiverReminders({ trigger = 'schedule' } = {}) {
+  if (trigger === 'schedule' && dailyRemindersPaused()) {
+    return { enabled: false, reason: 'Scheduled reminder emails are paused for Sept. 5 HST.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, noEmail: 0, failed: 0 };
+  }
   if (!beforeEvent()) {
     return { enabled: true, reason: 'The event start cutoff has passed.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, noEmail: 0, failed: 0 };
   }
