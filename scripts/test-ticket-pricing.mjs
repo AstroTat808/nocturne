@@ -67,7 +67,7 @@ has(publicInjector, 'Six-Drink Package', 'Public add-on section must include the
 has(publicInjector, 'Unlimited Drinking Water', 'Public add-on section must include Unlimited Drinking Water.');
 has(publicInjector, 'Late Checkout /', 'Public add-on section must include Late Checkout / Car Camping.');
 has(publicInjector, 'until 10:00 AM', 'Public Late Stay copy must state the 10:00 AM departure deadline.');
-check(!publicInjector.includes('Limited to the first 30 purchasers.'), 'Public Late Stay copy must not claim the retired 30-person cap.');
+check(!publicInjector.includes('<p>Stay on the property after the 3:00 AM event end until 8:00 AM. Limited to the first 30 purchasers.</p>'), 'Generated public Late Stay card must not claim the retired 30-person cap.');
 has(publicInjector, 'All add-ons are FINAL SALE / NON-REFUNDABLE.', 'Public add-on section must state the final-sale policy.');
 check(!/\bbeer\b|\bcocktails?\b|\bpremium cocktails?\b|\bpaid at the bar\b/i.test(publicInjector), 'Public add-on copy must not mention alcohol or bar-specific redemption.');
 has(publicInjector, 'html.replace(/<div class="event-facts"', 'Public add-ons must be injected adjacent to the event facts.');
