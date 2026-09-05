@@ -22,6 +22,7 @@ function authenticated(req) { if (!secret()) return false; const token = cookies
 function allowedOrigin(req) { const origin = req.headers.get('origin'); if (!origin) return true; const allowed = new Set(['https://nocturnefestival.com', 'https://www.nocturnefestival.com']); try { allowed.add(new URL(req.url).origin); } catch {} for (const value of [process.env.NOCTURNE_SITE_URL, process.env.URL, process.env.DEPLOY_PRIME_URL]) { try { if (value) allowed.add(new URL(value).origin); } catch {} } return allowed.has(origin); }
 function activeTicket(summary = {}, review = {}) { return Boolean(summary.ticketId) && (summary.status === 'paid' || ['paid', 'checked_in'].includes(String(review.ticketState || ''))); }
 function validEmail(value = '') { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim()); }
+function recentlyReminded(reminder, now = Date.now()) { return Boolean(reminder?.waiverVersion === WAIVER_VERSION && reminder.lastSentAt && now - new Date(reminder.lastSentAt).getTime() < COOLDOWN_MS); }
 
 async function candidates() {
   const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
@@ -46,12 +47,35 @@ async function candidates() {
   return rows;
 }
 
+async function sendOne(row, { now = Date.now(), source = 'admin' } = {}) {
+  if (!validEmail(row.application.email)) return { status: 'no_email', reason: 'Missing or invalid email.' };
+  if (recentlyReminded(row.reminder, now)) return { status: 'recent' };
+  const sent = await sendWaiverReminder({
+    application: row.application,
+    submissionId: row.submissionId,
+    ticketId: row.summary.ticketId,
+    idempotencyKey: `waiver-${WAIVER_VERSION}-${row.submissionId}-${Math.floor(now / COOLDOWN_MS)}`
+  });
+  const sentAt = new Date().toISOString();
+  const reminderStore = getStore({ name: REMINDER_STORE, consistency: 'strong' });
+  await reminderStore.setJSON(row.submissionId, {
+    submissionId: row.submissionId,
+    ticketId: row.summary.ticketId,
+    waiverVersion: WAIVER_VERSION,
+    lastSentAt: sentAt,
+    messageId: sent.messageId || null,
+    recipient: sent.recipient,
+    source
+  });
+  return { status: 'sent', sentAt, messageId: sent.messageId || null };
+}
+
 export default async (req) => {
   if (!authenticated(req)) return json({ error: 'Unauthorized.' }, 401);
   if (req.method === 'GET') {
     const rows = await candidates();
     const now = Date.now();
-    const recentlySent = rows.filter(({ reminder }) => reminder?.waiverVersion === WAIVER_VERSION && reminder.lastSentAt && now - new Date(reminder.lastSentAt).getTime() < COOLDOWN_MS).length;
+    const recentlySent = rows.filter(({ reminder }) => recentlyReminded(reminder, now)).length;
     return json({ ok: true, unsigned: rows.length, eligibleNow: rows.length - recentlySent, recentlySent, cooldownHours: COOLDOWN_MS / 3600000 });
   }
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -60,42 +84,37 @@ export default async (req) => {
 
   let body = {};
   try { body = await req.json(); } catch {}
-  if (String(body.confirm || '') !== 'SEND WAIVER REMINDERS') return json({ error: 'Confirmation phrase did not match.' }, 400);
-
   const rows = await candidates();
-  const reminderStore = getStore({ name: REMINDER_STORE, consistency: 'strong' });
+  const submissionId = String(body.submissionId || '').trim();
+
+  if (submissionId) {
+    if (String(body.confirm || '') !== 'SEND WAIVER REMINDER') return json({ error: 'Confirmation phrase did not match.' }, 400);
+    const row = rows.find((item) => item.submissionId === submissionId);
+    if (!row) return json({ error: 'This ticket is not an active unsigned waiver candidate.' }, 404);
+    try {
+      const result = await sendOne(row, { source: 'admin-individual' });
+      if (result.status === 'recent') return json({ ok: true, sent: false, skippedRecent: true, message: 'This guest was reminded within the last two hours.' });
+      if (result.status === 'no_email') return json({ error: result.reason }, 400);
+      await writeAudit('waiver.individual_reminder_sent', { submissionId, ticketId: row.summary.ticketId, recipient: row.application.email, messageId: result.messageId });
+      return json({ ok: true, sent: true, ticketId: row.summary.ticketId, sentAt: result.sentAt });
+    } catch (error) {
+      await writeAudit('waiver.individual_reminder_failed', { submissionId, ticketId: row.summary.ticketId, error: String(error?.message || error) });
+      return json({ error: String(error?.message || 'Send failed.').slice(0, 300) }, 500);
+    }
+  }
+
+  if (String(body.confirm || '') !== 'SEND WAIVER REMINDERS') return json({ error: 'Confirmation phrase did not match.' }, 400);
   const now = Date.now();
   const results = { sent: 0, skippedRecent: 0, skippedNoEmail: 0, failed: 0, failures: [] };
 
   for (const row of rows) {
-    const previous = row.reminder;
-    if (previous?.waiverVersion === WAIVER_VERSION && previous.lastSentAt && now - new Date(previous.lastSentAt).getTime() < COOLDOWN_MS) {
-      results.skippedRecent += 1;
-      continue;
-    }
-    if (!validEmail(row.application.email)) {
-      results.skippedNoEmail += 1;
-      results.failures.push({ ticketId: row.summary.ticketId, guestName: row.application.preferredName || row.application.fullName || '', reason: 'Missing or invalid email.' });
-      continue;
-    }
     try {
-      const bucket = Math.floor(now / COOLDOWN_MS);
-      const sent = await sendWaiverReminder({
-        application: row.application,
-        submissionId: row.submissionId,
-        ticketId: row.summary.ticketId,
-        idempotencyKey: `waiver-${WAIVER_VERSION}-${row.submissionId}-${bucket}`
-      });
-      const sentAt = new Date().toISOString();
-      await reminderStore.setJSON(row.submissionId, {
-        submissionId: row.submissionId,
-        ticketId: row.summary.ticketId,
-        waiverVersion: WAIVER_VERSION,
-        lastSentAt: sentAt,
-        messageId: sent.messageId || null,
-        recipient: sent.recipient
-      });
-      results.sent += 1;
+      const result = await sendOne(row, { now, source: 'admin-bulk' });
+      if (result.status === 'recent') results.skippedRecent += 1;
+      else if (result.status === 'no_email') {
+        results.skippedNoEmail += 1;
+        results.failures.push({ ticketId: row.summary.ticketId, guestName: row.application.preferredName || row.application.fullName || '', reason: result.reason });
+      } else results.sent += 1;
     } catch (error) {
       results.failed += 1;
       results.failures.push({ ticketId: row.summary.ticketId, guestName: row.application.preferredName || row.application.fullName || '', reason: String(error?.message || 'Send failed.').slice(0, 300) });
