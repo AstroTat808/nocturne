@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import createCheckout, { appendBundledAddOnLineItems, browserFormPost, checkoutInput } from '../netlify/functions/create-checkout.mjs';
-import { browserAddonCheckout, browserAddonFormPost } from '../netlify/functions/_browser-addon-checkout.mjs';
+import { browserAddonCheckout, browserAddonFormPost, trustedBrowserSubmission } from '../netlify/functions/_browser-addon-checkout.mjs';
 
 const checkoutUrl = 'https://nocturnefestival.com/ticket-access/checkout';
-const browserRequest = (body = '', url = checkoutUrl, origin = '') => new Request(url, {
+const browserRequest = (body = '', url = checkoutUrl, origin = '', fetchSite = '') => new Request(url, {
   method: 'POST',
   headers: {
     'content-type': 'application/x-www-form-urlencoded',
-    ...(origin ? { origin } : {})
+    ...(origin ? { origin } : {}),
+    ...(fetchSite ? { 'sec-fetch-site': fetchSite } : {})
   },
   body
 });
@@ -75,6 +76,7 @@ async function verifyStandaloneAddon({ path, formPolicyField, jsonPolicyField, e
   const legacyHandler = async (req) => {
     assert.equal(req.headers.get('content-type'), 'application/json', `${path} must normalize browser forms to JSON before the existing secure handler.`);
     assert.equal(req.headers.get('origin'), null, `${path} must remove the already-validated public Origin before invoking the rewritten internal handler.`);
+    assert.equal(req.headers.get('sec-fetch-site'), null, `${path} must remove browser fetch metadata before invoking the rewritten internal handler.`);
     received = await req.json();
     return Response.json({ ok: true, checkoutUrl: stripeUrl });
   };
@@ -82,20 +84,33 @@ async function verifyStandaloneAddon({ path, formPolicyField, jsonPolicyField, e
   process.env.NOCTURNE_SITE_URL = 'https://nocturnefestival.com';
   try {
     const internalFunctionUrl = `https://internal-function-host.netlify.app${path}`;
-    const req = browserRequest(`token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`, internalFunctionUrl, 'https://nocturnefestival.com');
-    assert.equal(browserAddonFormPost(req), true);
-    const response = await browserAddonCheckout(req, legacyHandler, { formPolicyField, jsonPolicyField, errorPath });
+
+    const firefoxLike = browserRequest(
+      `token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`,
+      internalFunctionUrl,
+      'https://unexpected-rewrite-host.example',
+      'same-origin'
+    );
+    assert.equal(trustedBrowserSubmission(firefoxLike), true, `${path} must trust browser-declared same-origin form navigation even when Netlify's rewritten request URL differs.`);
+    const response = await browserAddonCheckout(firefoxLike, legacyHandler, { formPolicyField, jsonPolicyField, errorPath });
     assert.deepEqual(received, { token, [jsonPolicyField]: true }, `${path} must preserve the digital-ticket token and policy acknowledgment.`);
     assert.equal(response.status, 303, `${path} browser form must redirect to Stripe Checkout.`);
     assert.equal(response.headers.get('location'), stripeUrl, `${path} must redirect to the Stripe Checkout URL returned by the existing handler.`);
 
+    const fallbackSameOrigin = browserRequest(
+      `token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`,
+      internalFunctionUrl,
+      'https://nocturnefestival.com'
+    );
+    assert.equal(trustedBrowserSubmission(fallbackSameOrigin), true, `${path} must retain exact-Origin fallback for clients without Fetch Metadata.`);
+
     let maliciousHandlerCalled = false;
     const blocked = await browserAddonCheckout(
-      browserRequest(`token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`, internalFunctionUrl, 'https://evil.example'),
+      browserRequest(`token=${encodeURIComponent(token)}&${encodeURIComponent(formPolicyField)}=yes`, internalFunctionUrl, 'https://nocturnefestival.com', 'cross-site'),
       async () => { maliciousHandlerCalled = true; return Response.json({ ok: true, checkoutUrl: stripeUrl }); },
       { formPolicyField, jsonPolicyField, errorPath }
     );
-    assert.equal(maliciousHandlerCalled, false, `${path} must reject an untrusted browser Origin before the checkout handler runs.`);
+    assert.equal(maliciousHandlerCalled, false, `${path} must reject cross-site browser submissions before the checkout handler runs.`);
     assert.equal(blocked.status, 303);
     assert.match(blocked.headers.get('location') || '', /Origin%20not%20allowed/);
   } finally {
@@ -123,4 +138,4 @@ await verifyStandaloneAddon({
   errorPath: '/ticket/late-stay/confirmed'
 });
 
-console.log('Shared admission checkout and standalone ticket add-on browser-form/origin regression tests passed.');
+console.log('Shared admission checkout and standalone ticket add-on browser-form/fetch-metadata regression tests passed.');

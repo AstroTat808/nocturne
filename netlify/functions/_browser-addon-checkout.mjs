@@ -26,6 +26,15 @@ export function browserAddonFormPost(req) {
   return type.includes('application/x-www-form-urlencoded') || type.includes('multipart/form-data');
 }
 
+export function trustedBrowserSubmission(req) {
+  const fetchSite = String(req.headers.get('sec-fetch-site') || '').trim().toLowerCase();
+  if (fetchSite) return fetchSite === 'same-origin';
+
+  const origin = String(req.headers.get('origin') || '').trim();
+  if (!origin) return true;
+  return origin === publicSiteOrigin(req);
+}
+
 async function formValues(req) {
   const type = (req.headers.get('content-type') || '').toLowerCase();
   if (type.includes('application/x-www-form-urlencoded')) {
@@ -40,8 +49,7 @@ async function formValues(req) {
 export async function browserAddonCheckout(req, legacyHandler, { formPolicyField, jsonPolicyField, errorPath }) {
   if (!browserAddonFormPost(req)) return legacyHandler(req);
 
-  const origin = String(req.headers.get('origin') || '').trim();
-  if (origin && origin !== publicSiteOrigin(req)) {
+  if (!trustedBrowserSubmission(req)) {
     return redirect(`${errorPath}?error=${encodeURIComponent('Origin not allowed.')}`);
   }
 
@@ -60,6 +68,10 @@ export async function browserAddonCheckout(req, legacyHandler, { formPolicyField
   headers.set('accept', 'application/json');
   headers.delete('content-length');
   headers.delete('origin');
+  headers.delete('sec-fetch-site');
+  headers.delete('sec-fetch-mode');
+  headers.delete('sec-fetch-dest');
+  headers.delete('sec-fetch-user');
 
   const normalized = new Request(req.url, {
     method: 'POST',
