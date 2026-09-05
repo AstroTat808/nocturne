@@ -4,7 +4,7 @@ import { makeReentryToken, readTicketAccess } from './_ticket-auth.mjs';
 import { writeAudit } from './_audit.mjs';
 import { drinkPackageConfig, drinkPackageRequested } from './_drink-package.mjs';
 import { waterPackageConfig } from './_water-package.mjs';
-import { lateStayAvailability, lateStayConfig, LATE_STAY_POLICY_TEXT, releaseLateStayReservation, reserveLateStaySlot } from './_late-stay.mjs';
+import { lateStayConfig, LATE_STAY_POLICY_TEXT, releaseLateStayReservation, reserveLateStaySlot } from './_late-stay.mjs';
 import { ticketPricing } from './_ticket-pricing.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
@@ -106,7 +106,7 @@ export function appendBundledAddOnLineItems(params, { currency, includeDrinkPack
     params[`line_items[${lineIndex}][price_data][currency]`] = currency;
     params[`line_items[${lineIndex}][price_data][unit_amount]`] = String(lateStay.priceCents);
     params[`line_items[${lineIndex}][price_data][product_data][name]`] = 'NOCTURNE Late Checkout / Car Camping — NON-REFUNDABLE';
-    params[`line_items[${lineIndex}][price_data][product_data][description]`] = `FINAL SALE / NON-REFUNDABLE. ${LATE_STAY_POLICY_TEXT} Limited to 30 guests. Stay on the property after the 3:00 AM event end until 8:00 AM. Each person remaining after 3:00 AM needs their own add-on.`;
+    params[`line_items[${lineIndex}][price_data][product_data][description]`] = `FINAL SALE / NON-REFUNDABLE. ${LATE_STAY_POLICY_TEXT} Stay on the property after the 3:00 AM event end until 8:00 AM. Each person remaining after 3:00 AM needs their own add-on.`;
   }
   return params;
 }
@@ -152,12 +152,8 @@ export default async (req) => {
   if (blockedTicketStates.has(String(existing?.status || '').toLowerCase())) return fail(req, 'This invitation already has a protected ticket or payment record.', 409);
   if (checkoutStillOpen(existing, includeDrinkPackage, includeWaterPackage, includeLateStay, unitAmount)) return browserFormPost(req) ? redirect(existing.checkoutUrl) : json({ ok: true, checkoutUrl: existing.checkoutUrl, reused: true });
 
-  if (includeLateStay) {
-    const availability = await lateStayAvailability();
-    if (availability.soldOut) return fail(req, 'Late Checkout / Car Camping is sold out. All 30 spots have been claimed or are currently reserved in checkout.', 409);
-    if (existing?.lateStayReservationId && existing?.lateStaySlot) {
-      await releaseLateStayReservation({ slot: existing.lateStaySlot, reservationId: existing.lateStayReservationId, reason: 'ticket_checkout_replaced' }).catch(() => {});
-    }
+  if (includeLateStay && existing?.lateStayReservationId && existing?.lateStaySlot) {
+    await releaseLateStayReservation({ slot: existing.lateStaySlot, reservationId: existing.lateStayReservationId, reason: 'ticket_checkout_replaced' }).catch(() => {});
   }
 
   const selectionKey = ['ticket', `price-${unitAmount}`, includeDrinkPackage ? 'six-drink' : '', includeWaterPackage ? 'water' : '', includeLateStay ? 'late-stay' : ''].filter(Boolean).join('+');
@@ -170,8 +166,8 @@ export default async (req) => {
     stripeExpiresAt = Math.floor(Date.now() / 1000) + 32 * 60;
     lateStayReservation = await reserveLateStaySlot({ submissionId, expiresAt: new Date((stripeExpiresAt + 120) * 1000).toISOString() });
     if (!lateStayReservation) {
-      await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'failed', error: 'late_stay_sold_out', updatedAt: new Date().toISOString() }).catch(() => {});
-      return fail(req, 'Late Checkout / Car Camping is sold out. All 30 spots have been claimed or are currently reserved in checkout.', 409);
+      await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'failed', error: 'late_stay_tracking_unavailable', updatedAt: new Date().toISOString() }).catch(() => {});
+      return fail(req, 'Late Checkout / Car Camping checkout could not be prepared. Please try again.', 503);
     }
   }
 
@@ -232,7 +228,7 @@ export default async (req) => {
       throw new Error('Ticket eligibility changed while checkout was being prepared.');
     }
     await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'completed', stripeCheckoutSessionId: session.id, checkoutExpiresAt, lateStaySlot: lateStayReservation?.slot || null, lateStayReservationId: lateStayReservation?.reservationId || null, updatedAt: createdAt });
-    await writeAudit('checkout.created', { submissionId, stripeCheckoutSessionId: session.id, ticketAmount: unitAmount, ticketPriceTier: pricing.changed ? '35' : '25', ticketPriceChangeAt: pricing.changeAt, packagePolicyAccepted: anyAddOnSelected ? true : null, drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayFinalSaleNonRefundable: includeLateStay ? true : null, lateStaySlot: lateStayReservation?.slot || null, expectedAmountTotal });
+    await writeAudit('checkout.created', { submissionId, stripeCheckoutSessionId: session.id, ticketAmount: unitAmount, ticketPriceTier: pricing.changed ? '35' : '25', ticketPriceChangeAt: pricing.changeAt, packagePolicyAccepted: anyAddOnSelected ? true : null, drinkPackageRequested: includeDrinkPackage, drinkPackagePolicyAccepted: includeDrinkPackage ? true : null, waterPackageRequested: includeWaterPackage, waterPackagePolicyAccepted: includeWaterPackage ? true : null, lateStayRequested: includeLateStay, lateStayPolicyAccepted: includeLateStay ? true : null, lateStayFinalSaleNonRefundable: includeLateStay ? true : null, lateStayTrackingSlot: lateStayReservation?.slot || null, lateStayUnlimitedInventory: includeLateStay ? true : null, expectedAmountTotal });
     return browserFormPost(req) ? redirect(session.url) : json({ ok: true, checkoutUrl: session.url, ticketAmount: unitAmount, ticketPriceTier: pricing.changed ? '35' : '25' });
   } catch (error) {
     if (lateStayReservation) await releaseLateStayReservation({ slot: lateStayReservation.slot, reservationId: lateStayReservation.reservationId, reason: 'ticket_checkout_failed' }).catch(() => {});
