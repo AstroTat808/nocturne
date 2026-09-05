@@ -18,9 +18,9 @@ mustContain('site/assets/js/ticket-package-policy.js', ['drink_package', 'water_
 mustContain('netlify/functions/create-checkout.mjs', ['packagePolicyAccepted', 'all selected add-ons are FINAL SALE / NON-REFUNDABLE', "'metadata[packagePolicyAccepted]'", 'NOCTURNE Unlimited Drinking Water — NON-REFUNDABLE']);
 mustNotContain('netlify/functions/create-checkout.mjs', ["form.get('drink_package_policy')", "form.get('water_package_policy')", "form.get('late_stay_policy')"]);
 mustContain('netlify/functions/ticket-view.mjs', ['name="package_policy"', 'I understand this package is non-refundable']);
-mustContain('netlify/functions/create-drink-package-checkout.mjs', ['packagePolicyAccepted', 'FINAL SALE / NON-REFUNDABLE']);
+mustContain('netlify/functions/_legacy-create-drink-package-checkout.mjs', ['packagePolicyAccepted', 'FINAL SALE / NON-REFUNDABLE']);
 mustContain('site/assets/js/ticket-view.js', ['name="water_policy"', 'I understand this package is non-refundable']);
-mustContain('netlify/functions/create-water-package-checkout.mjs', ['packagePolicyAccepted', 'FINAL SALE / NON-REFUNDABLE']);
+mustContain('netlify/functions/_legacy-create-water-package-checkout.mjs', ['packagePolicyAccepted', 'FINAL SALE / NON-REFUNDABLE']);
 mustContain('netlify/functions/admin-admission-refund.mjs', ['amount: String(amount)', "'metadata[drinkPackageRefunded]': 'false'", "drinkPackageStatus: 'forfeited'"]);
 mustContain('netlify/functions/stripe-webhook.mjs', ['FINAL SALE / NON-REFUNDABLE', 'Your NOCTURNE Drink Package Is Confirmed', 'waterPackagePurchaseType', "purchaseType: 'bundled'"]);
 mustContain('netlify/functions/stripe-webhook-router.mjs', ['Your NOCTURNE Water Package Is Confirmed', 'FINAL SALE / NON-REFUNDABLE']);
