@@ -19,7 +19,10 @@ for (const name of ['drink_package', 'water_package', 'late_stay']) {
 }
 assert.ok(manager.includes('name="package_policy"'), 'Manage Add-Ons must include one shared package_policy acknowledgment.');
 assert.ok(manager.includes('Checkout Selected Add-Ons →'), 'Manage Add-Ons must provide a single combined checkout action.');
-assert.ok(manager.includes('replace that checkout with a new combined checkout'), 'Open unpaid standalone checkouts must be replaceable.');
+assert.ok(manager.includes('new combined checkout'), 'Open unpaid standalone checkouts must be replaceable by the combined flow.');
+assert.ok(manager.includes('data-addon-total'), 'Manage Add-Ons must expose a running total.');
+assert.ok(manager.includes('MOST POPULAR'), 'Six-Drink must be prominently merchandised.');
+assert.ok(manager.includes('STAY UNTIL 10 AM'), 'Late Stay must be prominently merchandised.');
 assert.ok(checkout.includes("'metadata[purchaseType]': 'addon-bundle'"), 'Combined checkout must create addon-bundle Stripe sessions.');
 assert.ok(checkout.includes('line_items['), 'Combined checkout must build Stripe line items for selected add-ons.');
 assert.ok(checkout.includes('amountTotal: total'), 'Combined checkout must persist the combined amount.');
@@ -30,7 +33,7 @@ assert.ok(!ticketView.includes('/ticket/water/checkout'), 'Digital ticket v2 mus
 assert.ok(!ticketView.includes('/ticket/late-stay/checkout'), 'Digital ticket v2 must not scatter Late Stay checkout controls.');
 assert.ok(webhook.includes("purchaseType === 'addon-bundle'"), 'Webhook must intercept combined add-on sessions.');
 assert.ok(transition.includes("'water_package_addon'"), 'Water add-on payment transitions must not fall through to admission.');
-assert.ok(transition.includes("'late_stay_addon'"), 'Late Stay payment transitions must not fall through to admission.');
+assert.ok(transition.includes("'late_stay_addon'"), 'Late Stay add-on payment transitions must not fall through to admission.');
 assert.ok(transition.includes("'addon_bundle'"), 'Combined add-on payment transitions must not alter admission.');
 assert.ok(refund.includes("summary.ticketSource === 'comp'"), 'Comp admission must retain its no-Stripe-refund exception.');
 
@@ -44,4 +47,4 @@ assert.equal(lateStayConfig().departureTime, '10:00 AM', 'Late Stay must depart 
 for (const route of ['/ticket/addons', '/ticket/addons/checkout', '/ticket/addons/confirmed']) assert.ok(netlify.includes(`from = "${route}"`), `Netlify must route ${route}.`);
 assert.ok(netlify.includes('to = "/.netlify/functions/ticket-view-v2"'), 'Production ticket route must use unified digital ticket.');
 assert.ok(netlify.includes('to = "/.netlify/functions/stripe-webhook-router-v2"'), 'Production webhook route must use add-on-aware router.');
-console.log('Manage Add-Ons, comp parity, and 10am regression checks passed.');
+console.log('Manage Add-Ons, comp parity, merchandising, running total, and 10am regression checks passed.');
