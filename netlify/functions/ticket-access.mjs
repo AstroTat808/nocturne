@@ -2,7 +2,7 @@ import { getStore } from '@netlify/blobs';
 import { readTicketAccess } from './_ticket-auth.mjs';
 import { drinkPackageConfig } from './_drink-package.mjs';
 import { waterPackageConfig } from './_water-package.mjs';
-import { lateStayAvailability, lateStayConfig, LATE_STAY_POLICY_TEXT } from './_late-stay.mjs';
+import { lateStayConfig, LATE_STAY_POLICY_TEXT } from './_late-stay.mjs';
 import { ticketPricing } from './_ticket-pricing.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
@@ -42,7 +42,7 @@ function formattedLateStayPrice() {
   return `$${amount.toFixed(0)}`;
 }
 
-function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMessage = '', lateStay = null } = {}) {
+function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMessage = '' } = {}) {
   const configured = checkoutConfigured();
   const pricing = ticketPricing();
   const ticketName = escapeHtml(process.env.NOCTURNE_TICKET_NAME || 'NOCTURNE Festival — General Admission');
@@ -68,9 +68,7 @@ function renderPage({ paid = false, blocked = false, ticketId = '', checkoutMess
     const packageOption = drinkPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="drink_package" value="yes"><span><strong>I am 21+ — Add the Six-Drink Package · ${formattedPackagePrice()}</strong><small>Six credits for beer or well cocktails. Premium cocktails use one credit plus a $5 upgrade paid at the bar. Valid photo ID and event wristband required. Non-transferable; unused credits expire when event bar service ends. Service may be refused.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> The Six-Drink Package cannot be refunded, exchanged, prorated, transferred, or converted to cash, including unused credits.</small></span></label>` : '';
     const waterOption = waterPackageConfig().enabled ? `<label class="drink-package-option"><input type="checkbox" name="water_package" value="yes"><span><strong>Add Unlimited Drinking Water · ${formattedWaterPrice()}</strong><small>Unlimited drinking-water service for the registered ticket holder throughout festival operating hours. One package per ticket. Personal and non-transferable.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> The Unlimited Drinking Water Package cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash.</small></span></label>` : '';
     const lateStayConfigValue = lateStayConfig();
-    const lateStayRemaining = Number(lateStay?.remaining ?? lateStayConfigValue.capacity);
-    const lateStaySoldOut = Boolean(lateStay?.soldOut);
-    const lateStayOption = lateStayConfigValue.enabled ? `<label class="drink-package-option"${lateStaySoldOut ? ' style="opacity:.62"' : ''}><input type="checkbox" name="late_stay" value="yes" ${lateStaySoldOut ? 'disabled' : ''}><span><strong>${lateStaySoldOut ? 'SOLD OUT — ' : ''}Add Late Checkout / Car Camping · ${formattedLateStayPrice()}</strong><small>Stay on the property after NOCTURNE ends at 3:00 AM until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff. Each person staying after 3:00 AM needs their own add-on.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> ${escapeHtml(LATE_STAY_POLICY_TEXT)}</small><small style="display:block;margin-top:.4rem;color:#9d907f"><strong>LIMITED CAPACITY:</strong> ${lateStaySoldOut ? 'All 30 spots are currently claimed.' : `${lateStayRemaining} of ${lateStayConfigValue.capacity} spots currently available.`}</small></span></label>` : '';
+    const lateStayOption = lateStayConfigValue.enabled ? `<label class="drink-package-option"><input type="checkbox" name="late_stay" value="yes"><span><strong>Add Late Checkout / Car Camping · ${formattedLateStayPrice()}</strong><small>Stay on the property after NOCTURNE ends at 3:00 AM until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff. Each person staying after 3:00 AM needs their own add-on.</small><small style="display:block;margin-top:.55rem;color:#ffca61"><strong>FINAL SALE / NON-REFUNDABLE:</strong> ${escapeHtml(LATE_STAY_POLICY_TEXT)}</small><small style="display:block;margin-top:.4rem;color:#9d907f"><strong>ONE PER PERSON:</strong> The add-on is attached to the individual ticket after successful payment.</small></span></label>` : '';
     const addOnPolicy = `<label class="drink-package-option" data-addon-policy><input type="checkbox" name="package_policy" value="yes" disabled><span><strong>I understand all selected add-ons are FINAL SALE / NON-REFUNDABLE.</strong><small>This single acknowledgment applies to every optional package or add-on selected above and is required before checkout when any add-on is selected.</small></span></label>`;
     actions = `<form method="POST" action="/ticket-access/checkout" class="private-access-checkout">${packageOption}${waterOption}${lateStayOption}${addOnPolicy}<div class="private-access-actions"><button class="btn" type="submit">Continue to Checkout →</button><a class="btn secondary" href="/">Return to NOCTURNE</a></div></form>`;
   } else {
@@ -134,14 +132,12 @@ export default async (req) => {
   let checkoutMessage = '';
   if (url.searchParams.get('checkout') === 'cancelled') checkoutMessage = 'Checkout was cancelled. No charge was completed.';
   if (url.searchParams.get('checkout_error')) checkoutMessage = url.searchParams.get('checkout_error').slice(0, 240);
-  const lateStay = !order || order.status !== 'paid' ? await lateStayAvailability().catch(() => null) : null;
 
   return new Response(renderPage({
     paid: order?.status === 'paid',
     blocked: ['refunded', 'disputed'].includes(String(order?.status || '').toLowerCase()),
     ticketId: order?.ticketId || '',
-    checkoutMessage,
-    lateStay
+    checkoutMessage
   }), {
     status: 200,
     headers: {
