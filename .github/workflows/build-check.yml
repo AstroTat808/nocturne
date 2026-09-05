@@ -23,5 +23,14 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Run production build
+      - name: Syntax checks
+        run: npm run check
+
+      - name: Regression tests
+        run: npm test
+
+      - name: Preflight
+        run: npm run preflight
+
+      - name: Full production build
         run: npm run build
