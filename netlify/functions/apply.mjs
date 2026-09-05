@@ -1,5 +1,11 @@
 import { getStore } from '@netlify/blobs';
 import { createHash, randomUUID } from 'node:crypto';
+import {
+  APPLICATION_DUPLICATE_WINDOW_MS as DUPLICATE_WINDOW_MS,
+  applicationPhoneDigits as phoneDigits,
+  matchApplicationIdentity,
+  normalizeApplicationEmail as normalizeEmail
+} from './_application-identity.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const RATE_STORE = 'nocturne-application-rate-limits';
@@ -7,7 +13,6 @@ const APPLICATION_NOTIFY_TO = process.env.NOCTURNE_APPLICATION_NOTIFY_TO || 'inv
 const HELP_EMAIL = process.env.NOCTURNE_HELP_EMAIL || 'help@nocturnefestival.com';
 const RATE_WINDOW_MS = 60 * 60 * 1000;
 const RATE_MAX = 5;
-const DUPLICATE_WINDOW_MS = 30 * 60 * 1000;
 const MAX = {
   full_name: 120,
   preferred_name: 120,
@@ -32,16 +37,6 @@ function escapeHtml(value = '') {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
-}
-
-function normalizeEmail(value = '') {
-  return clean(value, MAX.email).toLowerCase();
-}
-
-function phoneDigits(value = '') {
-  let digits = String(value).replace(/\D/g, '');
-  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
-  return digits;
 }
 
 function formatPhone(value = '') {
@@ -166,8 +161,7 @@ async function findDuplicateApplication(fields) {
 
   for (const application of applications) {
     if (!application) continue;
-    const emailMatches = email && normalizeEmail(application.email) === email;
-    const phoneMatches = phone && phoneDigits(application.phone) === phone;
+    const { emailMatches, phoneMatches } = matchApplicationIdentity(application, { email, phone });
     if (emailMatches || phoneMatches) {
       return {
         id: application.id || null,

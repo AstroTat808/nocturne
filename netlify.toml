@@ -70,6 +70,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/application-diagnostic"
+  to = "/.netlify/functions/admin-application-diagnostic"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/delete-application"
   to = "/.netlify/functions/admin-delete-application"
   status = 200

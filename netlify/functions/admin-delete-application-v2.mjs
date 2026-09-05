@@ -1,15 +1,9 @@
 import { getStore } from '@netlify/blobs';
-import { createHash } from 'node:crypto';
 import deleteApplication from './admin-delete-application.mjs';
+import { applicationEmailRateKey } from './_application-identity.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const RATE_STORE = 'nocturne-application-rate-limits';
-
-function emailRateKey(value = '') {
-  const email = String(value || '').trim().toLowerCase();
-  const hash = createHash('sha256').update(email).digest('hex');
-  return email ? `email-${hash}` : '';
-}
 
 function json(data, status = 200) {
   return Response.json(data, {
@@ -36,7 +30,7 @@ export default async (req) => {
   if (confirmEmail) {
     try {
       const rateStore = getStore({ name: RATE_STORE, consistency: 'strong' });
-      const key = emailRateKey(confirmEmail);
+      const key = applicationEmailRateKey(confirmEmail);
       if (key) await rateStore.delete(key);
     } catch (error) {
       console.error('NOCTURNE deleted-applicant email throttle cleanup failed:', error);

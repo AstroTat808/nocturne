@@ -21,6 +21,7 @@
   <script src="/assets/js/admin-refund.js?v=20260825e" defer></script>
   <script src="/assets/js/admin-refund-policy.js?v=20260825a" defer></script>
   <script src="/assets/js/admin-delete.js?v=20260824a" defer></script>
+  <script src="/assets/js/admin-application-diagnostic.js?v=20260905a" defer></script>
   <script src="/assets/js/admin-export.js?v=20260824a" defer></script>
   <script src="/assets/js/admin-pagination.js?v=20260826a" defer></script>
   <script src="/assets/js/admin-reminder-test.js?v=20260901c" defer></script>
@@ -115,6 +116,23 @@
         <article><span id="stat-approved">0</span><small>Approved</small></article>
         <article><span id="stat-declined">0</span><small>Declined</small></article>
       </div>
+
+      <section class="admin-application-diagnostic" aria-labelledby="application-diagnostic-title">
+        <div class="admin-application-diagnostic-head">
+          <div>
+            <p class="admin-kicker">Application troubleshooting</p>
+            <h2 id="application-diagnostic-title">Duplicate blocker diagnostic.</h2>
+          </div>
+          <p>Check the live application store before asking someone to reapply. This shows whether their email, phone, or temporary email lock is blocking a new submission.</p>
+        </div>
+        <form id="admin-application-diagnostic-form" class="admin-application-diagnostic-form">
+          <label for="admin-diagnostic-email"><span>Email</span><input id="admin-diagnostic-email" type="email" maxlength="254" autocomplete="off" placeholder="guest@example.com"></label>
+          <label for="admin-diagnostic-phone"><span>Phone</span><input id="admin-diagnostic-phone" type="tel" maxlength="40" autocomplete="off" inputmode="tel" placeholder="808-555-0123"></label>
+          <button id="admin-diagnostic-submit" class="admin-outline-button" type="submit">Check live records</button>
+        </form>
+        <p id="admin-diagnostic-status" class="admin-status" role="status" aria-live="polite"></p>
+        <div id="admin-diagnostic-results" class="admin-diagnostic-results" aria-live="polite"></div>
+      </section>
 
       <section class="admin-invite-lifecycle" aria-labelledby="invite-lifecycle-title">
         <div class="admin-invite-lifecycle-head">
