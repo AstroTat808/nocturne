@@ -1,0 +1,90 @@
+name: Ticket integrity audit
+
+on:
+  push:
+    branches:
+      - ticket-integrity-audit-20260905
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Wait for matching Netlify preview and run audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://deploy-preview-26--nocturnefestival.netlify.app/api/internal/ticket-integrity-audit"
+          rm -f audit.json
+          for attempt in $(seq 1 48); do
+            oidc="$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=nocturne-ticket-audit" | jq -r '.value')"
+            code="$(curl -sS -o audit.json -w '%{http_code}' -H "Authorization: Bearer ${oidc}" "${endpoint}" || true)"
+            if [ "${code}" = "200" ] && jq -e '.ok == true' audit.json >/dev/null 2>&1; then
+              break
+            fi
+            if [ "${attempt}" = "48" ]; then
+              echo "Audit endpoint did not become ready. Last HTTP status: ${code}" >&2
+              if [ -f audit.json ]; then cat audit.json >&2; fi
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Produce sanitized audit report
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          data = json.loads(Path('audit.json').read_text())
+          s = data.get('summary', {})
+          lines = [
+              '### NOCTURNE ticket integrity audit',
+              '',
+              f"- Active digital tickets audited: **{s.get('activeTickets', 0)}**",
+              f"- Paid: **{s.get('paidTickets', 0)}** · Comp: **{s.get('compTickets', 0)}**",
+              f"- Signed waivers: **{s.get('signedWaivers', 0)}** · Unsigned/QR locked: **{s.get('unsignedWaivers', 0)}**",
+              f"- Production ticket pages returning 200: **{s.get('ticketPages200', 0)} / {s.get('activeTickets', 0)}**",
+              f"- Signed-waiver QR endpoints returning 200: **{s.get('signedQr200', 0)} / {s.get('signedWaivers', 0)}**",
+              f"- Unsigned-waiver QR endpoints correctly locked at 403: **{s.get('unsignedQrLocked403', 0)} / {s.get('unsignedWaivers', 0)}**",
+              f"- Tickets with any add-on: **{s.get('ticketsWithAnyAddon', 0)}**",
+              f"- Six-Drink packages: **{s.get('drinkPackages', 0)}** · Water: **{s.get('waterPackages', 0)}** · Late Stay: **{s.get('lateStayPackages', 0)}**",
+              f"- Records with blocking integrity errors: **{s.get('brokenOrBlocked', 0)}**",
+              f"- Records with warnings: **{s.get('withWarnings', 0)}**",
+              f"- Overall blocking integrity result: **{'PASS' if s.get('allIntegrityChecksPass') else 'FAIL'}**",
+          ]
+
+          error_codes = Counter()
+          warning_codes = Counter()
+          for row in data.get('rows', []):
+              for issue in row.get('issues', []):
+                  if issue.get('severity') == 'error':
+                      error_codes[issue.get('code', 'unknown')] += 1
+                  elif issue.get('severity') == 'warning':
+                      warning_codes[issue.get('code', 'unknown')] += 1
+          if error_codes:
+              lines += ['', '**Blocking issue codes**']
+              lines += [f"- `{code}`: {count}" for code, count in sorted(error_codes.items())]
+          if warning_codes:
+              lines += ['', '**Warning codes**']
+              lines += [f"- `{code}`: {count}" for code, count in sorted(warning_codes.items())]
+
+          Path('audit-comment.md').write_text('\n'.join(lines) + '\n')
+          Path('audit-summary.json').write_text(json.dumps({'generatedAt': data.get('generatedAt'), 'summary': s, 'errorCodes': error_codes, 'warningCodes': warning_codes}, indent=2, default=dict))
+          PY
+          cat audit-comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post sanitized report to audit PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/26/comments" --method POST --raw-field "body=$(cat audit-comment.md)"
