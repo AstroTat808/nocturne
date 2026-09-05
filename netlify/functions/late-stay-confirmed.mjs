@@ -8,20 +8,20 @@ function escapeHtml(value = '') {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-function page({ confirmed = false, pending = false, cancelled = false, message = '', amount = '', slot = null }) {
+function page({ confirmed = false, pending = false, cancelled = false, message = '', amount = '' }) {
   const kicker = confirmed ? 'Late Stay Confirmed' : pending ? 'Finalizing Purchase' : cancelled ? 'Checkout Canceled' : 'Late Stay Status';
   const heading = confirmed ? 'You can stay until 8:00 AM.' : pending ? 'Payment is being verified.' : cancelled ? 'No charge was made.' : 'We could not confirm that add-on.';
   const status = confirmed
-    ? `<div class="private-access-status"><strong>Late Checkout / Car Camping Added</strong>${amount ? `<br>${escapeHtml(amount)}` : ''}${slot ? `<br>Capacity slot ${Number(slot)}` : ''}</div><div class="private-access-status"><strong>Departure deadline: 8:00 AM</strong><br>Each person remaining on the property after 3:00 AM must have this add-on attached to their own ticket.</div>`
+    ? `<div class="private-access-status"><strong>Late Checkout / Car Camping Added</strong>${amount ? `<br>${escapeHtml(amount)}` : ''}</div><div class="private-access-status"><strong>Departure deadline: 8:00 AM</strong><br>Each person remaining on the property after 3:00 AM must have this add-on attached to their own ticket.</div>`
     : pending
       ? '<div class="private-access-status"><strong>Finalizing your late-stay add-on…</strong><br>This page will refresh automatically.</div>'
       : cancelled
-        ? '<div class="private-access-status"><strong>Checkout canceled.</strong><br>Your existing admission ticket remains unchanged and the temporary capacity reservation will expire.</div>'
+        ? '<div class="private-access-status"><strong>Checkout canceled.</strong><br>Your existing admission ticket remains unchanged.</div>'
         : `<div class="private-access-status"><strong>${escapeHtml(message || 'Late-stay confirmation was not found.')}</strong></div>`;
   const copy = confirmed
     ? 'Reopen or refresh your original digital ticket to see the Late Checkout / Car Camping entitlement. You may remain on the NOCTURNE property after the 3:00 AM event end until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff.'
     : cancelled
-      ? 'You can return to your digital ticket while capacity remains if you decide to add Late Checkout / Car Camping.'
+      ? 'You can return to your digital ticket if you decide to add Late Checkout / Car Camping.'
       : pending
         ? 'NOCTURNE is verifying the Stripe payment. Do not submit another payment.'
         : 'Use your original digital ticket to try again, or contact help@nocturnefestival.com.';
@@ -46,7 +46,7 @@ export default async (req) => {
   const summary = await reconcileLateStayCheckout({ summaryEntry, orderStore, reviewStore }).catch(() => summaryEntry?.data || null);
   if (summary?.lateStayPurchased && summary.lateStayCheckoutSessionId === sessionId) {
     const amount = Number.isFinite(Number(summary.lateStayPriceCents)) ? `${String(checkoutOrder.currency || 'usd').toUpperCase()} ${(Number(summary.lateStayPriceCents) / 100).toFixed(2)}` : '';
-    return new Response(page({ confirmed: true, amount, slot: summary.lateStaySlot || null }), { status: 200, headers });
+    return new Response(page({ confirmed: true, amount }), { status: 200, headers });
   }
   return new Response(page({ pending: true }), { status: 202, headers });
 };

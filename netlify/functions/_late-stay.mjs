@@ -3,21 +3,23 @@ import { randomBytes } from 'node:crypto';
 import { writeAudit } from './_audit.mjs';
 
 export const LATE_STAY_PRICE_CENTS = 2000;
-export const LATE_STAY_CAPACITY = 30;
+// Kept as a compatibility export for older imports. Late Stay is no longer capacity-limited.
+export const LATE_STAY_CAPACITY = null;
 export const LATE_STAY_DEPARTURE = '8:00 AM';
 export const LATE_STAY_POLICY_LABEL = 'FINAL SALE / NON-REFUNDABLE';
 export const LATE_STAY_POLICY_TEXT = 'The Late Checkout / Car Camping add-on cannot be refunded, exchanged, prorated, transferred, converted to account credit, or redeemed for cash.';
 export const LATE_STAY_FORFEITURE_TEXT = 'If the associated admission is canceled, refunded, revoked, or otherwise invalidated, the Late Checkout / Car Camping entitlement is forfeited and remains non-refundable.';
 
+// This store now provides durable checkout tracking only. It no longer enforces a finite inventory.
 const CAPACITY_STORE = 'nocturne-late-stay-capacity';
 
 export function lateStayConfig() {
   const configuredPrice = Number(process.env.NOCTURNE_LATE_STAY_PRICE_CENTS || LATE_STAY_PRICE_CENTS);
-  const configuredCapacity = Number(process.env.NOCTURNE_LATE_STAY_CAPACITY || LATE_STAY_CAPACITY);
   return {
     enabled: String(process.env.NOCTURNE_LATE_STAY_ENABLED || 'true').toLowerCase() !== 'false',
     priceCents: Number.isInteger(configuredPrice) && configuredPrice >= 50 ? configuredPrice : LATE_STAY_PRICE_CENTS,
-    capacity: Number.isInteger(configuredCapacity) && configuredCapacity > 0 && configuredCapacity <= 500 ? configuredCapacity : LATE_STAY_CAPACITY,
+    capacity: null,
+    unlimited: true,
     departureTime: LATE_STAY_DEPARTURE
   };
 }
@@ -41,26 +43,10 @@ function slotKey(slot) {
   return `slot-${String(slot).padStart(3, '0')}`;
 }
 
-function activeReservation(record, now = Date.now()) {
-  if (record?.status !== 'reserved') return false;
-  const expiresAt = new Date(record.expiresAt || 0).getTime();
-  return Number.isFinite(expiresAt) && expiresAt > now;
-}
-
 export async function lateStayAvailability() {
   const config = lateStayConfig();
-  if (!config.enabled) return { ...config, sold: 0, reserved: 0, remaining: 0, soldOut: true };
-  const store = capacityStore();
-  const records = await Promise.all(Array.from({ length: config.capacity }, (_, index) => store.get(slotKey(index + 1), { type: 'json', consistency: 'strong' }).catch(() => null)));
-  const now = Date.now();
-  let sold = 0;
-  let reserved = 0;
-  for (const record of records) {
-    if (record?.status === 'sold') sold += 1;
-    else if (activeReservation(record, now)) reserved += 1;
-  }
-  const remaining = Math.max(0, config.capacity - sold - reserved);
-  return { ...config, sold, reserved, remaining, soldOut: remaining <= 0 };
+  if (!config.enabled) return { ...config, sold: 0, reserved: 0, remaining: null, soldOut: true };
+  return { ...config, sold: null, reserved: null, remaining: null, soldOut: false };
 }
 
 export async function reserveLateStaySlot({ submissionId, ticketId = null, reservationId = '', expiresAt }) {
@@ -71,12 +57,11 @@ export async function reserveLateStaySlot({ submissionId, ticketId = null, reser
   const expiry = new Date(expiresAt || Date.now() + 31 * 60 * 1000);
   if (Number.isNaN(expiry.getTime()) || expiry.getTime() <= Date.now()) throw new Error('Late-stay reservation expiration is invalid.');
 
-  for (let slot = 1; slot <= config.capacity; slot += 1) {
+  // Allocate a random tracking slot instead of consuming one of a finite set.
+  // Atomic onlyIfNew writes preserve collision safety and existing reconciliation behavior.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const slot = 1_000_000 + randomBytes(4).readUInt32BE(0);
     const key = slotKey(slot);
-    const entry = await store.getWithMetadata(key, { type: 'json', consistency: 'strong' }).catch(() => null);
-    const current = entry?.data || null;
-    if (current?.status === 'sold' || activeReservation(current)) continue;
-
     const now = new Date().toISOString();
     const record = {
       slot,
@@ -86,9 +71,10 @@ export async function reserveLateStaySlot({ submissionId, ticketId = null, reser
       ticketId: ticketId || null,
       reservedAt: now,
       expiresAt: expiry.toISOString(),
-      updatedAt: now
+      updatedAt: now,
+      unlimitedInventory: true
     };
-    const write = await store.setJSON(key, record, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true }).catch(() => null);
+    const write = await store.setJSON(key, record, { onlyIfNew: true }).catch(() => null);
     if (write?.modified) return record;
   }
   return null;
@@ -122,7 +108,8 @@ export async function markLateStaySold({ slot, reservationId, submissionId, tick
     paidAt,
     soldAt: paidAt,
     expiresAt: null,
-    updatedAt: paidAt
+    updatedAt: paidAt,
+    unlimitedInventory: true
   };
   const write = await store.setJSON(key, sold, { onlyIfMatch: entry.etag }).catch(() => null);
   return Boolean(write?.modified);
@@ -186,11 +173,11 @@ export async function reconcileLateStayCheckout({ summaryEntry, orderStore, revi
   if (Number(session.amount_total || 0) !== expectedPrice) throw new Error('Late-stay checkout amount did not match the configured price.');
   const slot = Number(session.metadata?.lateStaySlot || summary.lateStaySlot || 0);
   const reservationId = String(session.metadata?.lateStayReservationId || summary.lateStayReservationId || '');
-  if (!slot || !reservationId) throw new Error('Late-stay checkout is missing its capacity reservation.');
+  if (!slot || !reservationId) throw new Error('Late-stay checkout is missing its tracking reservation.');
 
   const paidAt = new Date().toISOString();
   const sold = await markLateStaySold({ slot, reservationId, submissionId: summary.submissionId, ticketId: summary.ticketId, sessionId: session.id, paidAt });
-  if (!sold) throw new Error('Late-stay capacity reservation could not be finalized.');
+  if (!sold) throw new Error('Late-stay checkout tracking reservation could not be finalized.');
 
   const fields = lateStayFields({ sessionId: session.id, paymentIntentId: session.payment_intent || null, paidAt, priceCents: expectedPrice, slot, reservationId, purchaseType: 'addon' });
   const next = { ...summary, ...fields };
@@ -205,6 +192,6 @@ export async function reconcileLateStayCheckout({ summaryEntry, orderStore, revi
   if (checkoutOrder) await orderStore.setJSON(session.id, { ...checkoutOrder, ...fields, status: 'paid', paymentStatus: session.payment_status, paidAt, updatedAt: paidAt });
   if (session.payment_intent) await orderStore.setJSON(`payment-intent-${session.payment_intent}`, { submissionId: summary.submissionId, stripeCheckoutSessionId: session.id, paymentRole: 'late_stay_addon', createdAt: paidAt });
   await syncReview(reviewStore, summary.submissionId, fields);
-  await writeAudit('late_stay.paid', { submissionId: summary.submissionId, ticketId: summary.ticketId, stripeCheckoutSessionId: session.id, stripePaymentIntentId: session.payment_intent || null, amountTotal: expectedPrice, slot, purchaseType: 'addon' });
+  await writeAudit('late_stay.paid', { submissionId: summary.submissionId, ticketId: summary.ticketId, stripeCheckoutSessionId: session.id, stripePaymentIntentId: session.payment_intent || null, amountTotal: expectedPrice, slot, purchaseType: 'addon', unlimitedInventory: true });
   return next;
 }
