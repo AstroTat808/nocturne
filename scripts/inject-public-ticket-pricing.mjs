@@ -25,12 +25,12 @@ const addOns = `
           <div class="public-addon-grid">
             <article class="public-addon-card"><small>$55</small><strong>Six-Drink<br>Package</strong><p>Six beverage credits for the registered ticket holder.</p></article>
             <article class="public-addon-card"><small>$15</small><strong>Unlimited<br>Drinking Water</strong><p>Unlimited drinking-water service throughout festival operating hours.</p></article>
-            <article class="public-addon-card"><small>$20</small><strong>Late Checkout /<br>Car Camping</strong><p>Stay on the property after the 3:00 AM event end until 8:00 AM. Limited to the first 30 purchasers.</p></article>
+            <article class="public-addon-card"><small>$20</small><strong>Late Checkout /<br>Car Camping</strong><p>Stay on the property after the 3:00 AM event end until 10:00 AM.</p></article>
           </div>
           <p class="public-addon-policy"><strong>All add-ons are FINAL SALE / NON-REFUNDABLE.</strong> Add-ons are personal, non-transferable, subject to availability, and must be attached to the registered guest's ticket.</p>
         </section>`;
 
-const addOnFaq = `<div class="faq-item"><button aria-expanded="false"><span>What optional add-ons are available?</span><span class="plus">+</span></button><div class="faq-answer"><p>Approved ticket holders can choose from the <strong>$55 Six-Drink Package</strong>, <strong>$15 Unlimited Drinking Water Package</strong>, and <strong>$20 Late Checkout / Car Camping</strong> add-on. The Six-Drink Package includes six beverage credits. Unlimited Water covers drinking-water service during festival operating hours. Late Checkout / Car Camping allows the registered ticket holder to remain on the property after 3:00 AM until 8:00 AM and is limited to the first 30 purchasers. All add-ons are personal, non-transferable, <strong>final sale / non-refundable</strong>, and subject to availability.</p></div></div>`;
+const addOnFaq = `<div class="faq-item"><button aria-expanded="false"><span>What optional add-ons are available?</span><span class="plus">+</span></button><div class="faq-answer"><p>Approved ticket holders can choose from the <strong>$55 Six-Drink Package</strong>, <strong>$15 Unlimited Drinking Water Package</strong>, and <strong>$20 Late Checkout / Car Camping</strong> add-on. The Six-Drink Package includes six beverage credits. Unlimited Water covers drinking-water service during festival operating hours. Late Checkout / Car Camping allows the registered ticket holder to remain on the property after 3:00 AM until 10:00 AM. All add-ons are personal, non-transferable, <strong>final sale / non-refundable</strong>, and subject to availability.</p></div></div>`;
 
 function ticketCard(note) {
   return `<article class="event-fact event-fact-ticket"><small>Ticket</small><strong class="ticket-price-current" data-ticket-current-price>$25</strong><p class="ticket-price-window" data-ticket-price-window>Approved admission through <strong>11:59 PM HST September 1</strong></p><p class="ticket-price-increase" data-ticket-price-increase>Price increases to <strong>$35</strong> at <strong>12:00 AM HST September 2</strong></p><p class="ticket-price-note">${note}</p></article>`;
@@ -89,10 +89,15 @@ for (const relative of files) {
 
   if (!html.includes('id="optional-addons"')) {
     html = html.replace(/<div class="event-facts"[^>]*>[\s\S]*?<\/div>/, (eventFacts) => `${eventFacts}${addOns}`);
+  } else {
+    html = html
+      .replaceAll('Stay on the property after the 3:00 AM event end until 8:00 AM. Limited to the first 30 purchasers.', 'Stay on the property after the 3:00 AM event end until 10:00 AM.')
+      .replaceAll('Late Checkout / Car Camping allows the registered ticket holder to remain on the property after 3:00 AM until 8:00 AM and is limited to the first 30 purchasers.', 'Late Checkout / Car Camping allows the registered ticket holder to remain on the property after 3:00 AM until 10:00 AM.');
   }
 
   html = replaceFaq(html, 'Are drink or water packages available?');
   html = replaceFaq(html, 'Are there optional drink packages?');
+  html = replaceFaq(html, 'What optional add-ons are available?');
 
   fs.writeFileSync(file, html);
 }
