@@ -24,8 +24,16 @@ jobs:
         run: npm run check
       - name: Hardening baseline test
         run: node scripts/test-hardening.mjs
-      - name: Existing feature regressions
-        run: node scripts/test-water-package.mjs && node scripts/test-package-policy.mjs && node scripts/test-shared-checkout.mjs && node scripts/test-late-stay.mjs && node scripts/test-manage-addons.mjs
+      - name: Water regression
+        run: node scripts/test-water-package.mjs
+      - name: Package policy regression
+        run: node scripts/test-package-policy.mjs
+      - name: Shared checkout regression
+        run: node scripts/test-shared-checkout.mjs
+      - name: Late Stay regression
+        run: node scripts/test-late-stay.mjs
+      - name: Manage Add-Ons regression
+        run: node scripts/test-manage-addons.mjs
       - name: Gate waiver regression
         run: node scripts/test-gate-readiness.mjs
       - name: Event-day final regression
