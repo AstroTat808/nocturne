@@ -2,7 +2,7 @@ import { getStore } from '@netlify/blobs';
 import { writeAudit } from './_audit.mjs';
 import { sendOpsAlert } from './_ops-alert.mjs';
 import { sendPurchaseReminder } from './_purchase-reminder-email.mjs';
-import { beforeEvent, eligibleForPurchaseReminder, honoluluDate } from './_reminder-policy.mjs';
+import { beforeEvent, dailyRemindersPaused, eligibleForPurchaseReminder, honoluluDate } from './_reminder-policy.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -56,6 +56,9 @@ async function processCandidate(submissionId, dateKey, stores) {
 }
 
 export async function runPurchaseReminders({ trigger = 'schedule', scanAll = false } = {}) {
+  if (trigger === 'schedule' && dailyRemindersPaused()) {
+    return { enabled: false, reason: 'Scheduled reminder emails are paused for Sept. 5 HST.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, failed: 0 };
+  }
   if (!remindersEnabled()) {
     return { enabled: false, reason: 'Purchase reminders are not enabled in live mode.', scanned: 0, sent: 0, duplicate: 0, ineligible: 0, failed: 0 };
   }
