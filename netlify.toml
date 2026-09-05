@@ -71,7 +71,7 @@
 
 [[redirects]]
   from = "/api/admin/delete-application"
-  to = "/.netlify/functions/admin-delete-application"
+  to = "/.netlify/functions/admin-delete-application-v2"
   status = 200
   force = true
 

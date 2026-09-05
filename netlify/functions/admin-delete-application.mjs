@@ -104,6 +104,8 @@ function hasTicketActivity(review, summary) {
     || review?.waterPackagePaymentIntentId
     || review?.lateStayCheckoutSessionId
     || review?.lateStayPaymentIntentId
+    || review?.addonBundleCheckoutSessionId
+    || review?.addonBundlePaymentIntentId
     || summary?.ticketId
     || summary?.stripeCheckoutSessionId
     || summary?.stripePaymentIntentId
@@ -115,6 +117,8 @@ function hasTicketActivity(review, summary) {
     || summary?.waterPackagePaymentIntentId
     || summary?.lateStayCheckoutSessionId
     || summary?.lateStayPaymentIntentId
+    || summary?.addonBundleCheckoutSessionId
+    || summary?.addonBundlePaymentIntentId
     || summary?.checkedInAt
     || summary?.paidAt
     || summary?.refundedAt
@@ -137,6 +141,8 @@ function hasStripeActivity(review, summary) {
     || review?.waterPackagePaymentIntentId
     || review?.lateStayCheckoutSessionId
     || review?.lateStayPaymentIntentId
+    || review?.addonBundleCheckoutSessionId
+    || review?.addonBundlePaymentIntentId
     || summary?.stripeCheckoutSessionId
     || summary?.stripePaymentIntentId
     || summary?.stripeRefundId
@@ -147,6 +153,8 @@ function hasStripeActivity(review, summary) {
     || summary?.waterPackagePaymentIntentId
     || summary?.lateStayCheckoutSessionId
     || summary?.lateStayPaymentIntentId
+    || summary?.addonBundleCheckoutSessionId
+    || summary?.addonBundlePaymentIntentId
   );
 }
 
@@ -198,6 +206,10 @@ function financialTombstone(record, submissionId, revokedAt) {
     disputedAt: record.disputedAt || null,
     disputeStatus: record.disputeStatus || null,
     checkedInAt: record.checkedInAt || null,
+    addonBundleCheckoutStatus: record.addonBundleCheckoutStatus || null,
+    addonBundleCheckoutSessionId: record.addonBundleCheckoutSessionId || null,
+    addonBundlePaymentIntentId: record.addonBundlePaymentIntentId || null,
+    addonBundleSelectionKey: record.addonBundleSelectionKey || record.selectionKey || null,
     drinkPackagePurchased: drinkPurchased,
     drinkPackageStatus: drinkPurchased ? 'revoked' : 'none',
     drinkPackagePriceCents: Number(record.drinkPackagePriceCents || 0),
@@ -247,10 +259,12 @@ async function forceRevokeAndDelete({ applicationStore, reviewStore, inviteStore
     summary?.drinkPackageCheckoutSessionId,
     summary?.waterPackageCheckoutSessionId,
     summary?.lateStayCheckoutSessionId,
+    summary?.addonBundleCheckoutSessionId,
     review?.stripeCheckoutSessionId,
     review?.drinkPackageCheckoutSessionId,
     review?.waterPackageCheckoutSessionId,
-    review?.lateStayCheckoutSessionId
+    review?.lateStayCheckoutSessionId,
+    review?.addonBundleCheckoutSessionId
   ].filter(Boolean).map(String));
 
   for (const key of sessionKeys) {
@@ -269,6 +283,7 @@ async function forceRevokeAndDelete({ applicationStore, reviewStore, inviteStore
 
   await orderStore.delete(`checkout-attempt-${submissionId}`).catch(() => {});
   await orderStore.delete(`late-stay-checkout-attempt-${submissionId}`).catch(() => {});
+  await orderStore.delete(`addon-bundle-checkout-attempt-${submissionId}`).catch(() => {});
   if (review?.inviteHash) await inviteStore.delete(String(review.inviteHash)).catch(() => {});
   await reviewStore.delete(submissionId);
   await applicationStore.delete(submissionId);
@@ -283,6 +298,7 @@ async function forceRevokeAndDelete({ applicationStore, reviewStore, inviteStore
     drinkPackageRevoked: Boolean(summary?.drinkPackagePurchased || review?.drinkPackagePurchased),
     waterPackageRevoked: Boolean(summary?.waterPackagePurchased || review?.waterPackagePurchased),
     lateStayRevoked: Boolean(summary?.lateStayPurchased || review?.lateStayPurchased),
+    addonBundleRecorded: Boolean(summary?.addonBundleCheckoutSessionId || review?.addonBundleCheckoutSessionId),
     revokedAt
   });
 

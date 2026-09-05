@@ -20,10 +20,10 @@
   <script src="/assets/js/admin-email.js?v=20260821h" defer></script>
   <script src="/assets/js/admin-refund.js?v=20260825e" defer></script>
   <script src="/assets/js/admin-refund-policy.js?v=20260825a" defer></script>
-  <script src="/assets/js/admin-delete.js?v=20260824a" defer></script>
+  <script src="/assets/js/admin-delete.js?v=20260905a" defer></script>
   <script src="/assets/js/admin-export.js?v=20260824a" defer></script>
   <script src="/assets/js/admin-pagination.js?v=20260826a" defer></script>
-  <script src="/assets/js/admin-reminder-test.js?v=20260901c" defer></script>
+  <script src="/assets/js/admin-reminder-test.js?v=20260905a" defer></script>
 </head>
 <body class="admin-body">
   <header class="admin-topbar">
@@ -77,7 +77,7 @@
         <div>
           <p class="admin-kicker">Controlled email test</p>
           <h2 id="reminder-test-title">Send one purchase reminder.</h2>
-          <p>Bulk reminders remain paused during test mode. Enter the exact email of one approved applicant who redeemed their invitation but has not purchased a ticket.</p>
+          <p>Use this controlled action to send one real purchase reminder to an approved applicant who redeemed their invitation but has not purchased admission. Scheduled reminder jobs follow the active event-day reminder policy.</p>
         </div>
         <form id="admin-reminder-test-form" class="admin-reminder-test-form">
           <label for="admin-reminder-test-email"><span>Applicant email</span><input id="admin-reminder-test-email" type="email" autocomplete="off" placeholder="guest@example.com" required></label>
@@ -92,7 +92,7 @@
           <article><span id="drink-stat-purchased">0</span><small>Packages sold</small></article><article><span id="drink-stat-pending">0</span><small>Awaiting band</small></article><article><span id="drink-stat-active">0</span><small>Active bands</small></article><article><span id="drink-stat-exhausted">0</span><small>Exhausted</small></article><article><span id="drink-stat-redeemed">0</span><small>Credits redeemed</small></article><article><span id="drink-stat-remaining">0</span><small>Credits remaining</small></article>
         </div>
         <p id="drink-mix" class="admin-muted">Beer 0 · Well 0 · Premium 0 · Non-alcoholic 0</p>
-        <p class="admin-muted"><strong>Policy:</strong> Optional packages and limited-capacity add-ons are final sale and non-refundable where stated.</p>
+        <p class="admin-muted"><strong>Policy:</strong> Optional packages and add-ons are final sale and non-refundable where stated.</p>
       </section>
 
       <section class="admin-ticket-overview" aria-labelledby="ticket-ops-title">

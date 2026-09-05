@@ -36,6 +36,22 @@ async function stripe(path, body, idempotencyKey = '') {
   if (!response.ok) throw new Error(data?.error?.message || `Stripe returned ${response.status}.`);
   return data;
 }
+async function stripeSession(sessionId) {
+  if (!sessionId) return null;
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, { headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` } });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error?.message || `Stripe returned ${response.status}.`);
+  return data;
+}
+async function closePriorBundle(summary) {
+  if (summary?.addonBundleCheckoutStatus !== 'checkout_created' || !summary?.addonBundleCheckoutSessionId) return;
+  const session = await stripeSession(summary.addonBundleCheckoutSessionId);
+  if (session?.payment_status === 'paid' || session?.status === 'complete') throw new Error('Previous add-on checkout may already have completed. Reload your digital ticket before starting another checkout.');
+  if (session?.status === 'expired') return;
+  if (session?.status !== 'open') throw new Error('Previous add-on checkout status could not be safely replaced. Reload your digital ticket and try again.');
+  const expired = await stripe(`checkout/sessions/${encodeURIComponent(summary.addonBundleCheckoutSessionId)}/expire`, {});
+  if (expired?.status !== 'expired') throw new Error('Previous add-on checkout could not be closed safely. Reload your digital ticket and try again.');
+}
 async function claim(store, submissionId, selectionKey) {
   const key = `addon-bundle-checkout-attempt-${submissionId}`;
   const entry = await store.getWithMetadata(key, { type: 'json', consistency: 'strong' });
@@ -46,6 +62,10 @@ async function claim(store, submissionId, selectionKey) {
   const attempt = { submissionId, status: 'creating', selectionKey, idempotencyKey: reuse || `nocturne-addon-bundle-${randomBytes(18).toString('hex')}`, startedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   const write = await store.setJSON(key, attempt, entry ? { onlyIfMatch: entry.etag } : { onlyIfNew: true });
   return write.modified ? { key, attempt } : null;
+}
+async function markClaimFailed(store, checkoutClaim, error) {
+  if (!checkoutClaim) return;
+  await store.setJSON(checkoutClaim.key, { ...checkoutClaim.attempt, status: 'failed', error: String(error?.message || error || 'checkout_failed').slice(0, 500), updatedAt: new Date().toISOString() }).catch(() => {});
 }
 function individualPending(summary, prefix) {
   if (summary?.[`${prefix}Purchased`] || summary?.[`${prefix}CheckoutStatus`] !== 'checkout_created') return false;
@@ -89,15 +109,38 @@ export default async (req) => {
   if ((includeDrink && individualPending(summary, 'drinkPackage')) || (includeWater && individualPending(summary, 'waterPackage')) || (includeLate && individualPending(summary, 'lateStay'))) return fail(req, token, 'One selected add-on already has an open checkout. Resume or let that checkout expire before starting a combined checkout.', 409);
 
   const selectionKey = [includeDrink ? 'drink' : '', includeWater ? 'water' : '', includeLate ? 'late' : ''].filter(Boolean).join('+');
-  if (checkoutOpen(summary) && summary.addonBundleSelectionKey === selectionKey) return browserForm(req) ? redirect(summary.addonBundleCheckoutUrl) : json({ ok: true, checkoutUrl: summary.addonBundleCheckoutUrl, reused: true });
+  if (checkoutOpen(summary) && summary.addonBundleSelectionKey === selectionKey && summary.addonBundleCheckoutSessionId) {
+    try {
+      const existingSession = await stripeSession(summary.addonBundleCheckoutSessionId);
+      if (existingSession?.status === 'open' && existingSession?.payment_status !== 'paid' && existingSession?.url) return browserForm(req) ? redirect(existingSession.url) : json({ ok: true, checkoutUrl: existingSession.url, reused: true });
+      if (existingSession?.payment_status === 'paid' || existingSession?.status === 'complete') return fail(req, token, 'Your previous add-on checkout may already be complete. Reload your digital ticket before trying again.', 409);
+    } catch (error) {
+      console.error('NOCTURNE existing add-on bundle status check failed:', error);
+      return fail(req, token, 'Your previous add-on checkout could not be verified safely. Reload your digital ticket and try again.', 503);
+    }
+  }
 
   const checkoutClaim = await claim(orderStore, parsed.submissionId, selectionKey);
   if (!checkoutClaim) return fail(req, token, 'Your add-on checkout is already being prepared. Please wait a moment and try again.', 409);
+
+  try {
+    await closePriorBundle(summary);
+  } catch (error) {
+    await markClaimFailed(orderStore, checkoutClaim, error);
+    await writeAudit('addon_bundle.checkout_replacement_blocked', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, error: String(error?.message || error) }).catch(() => {});
+    return fail(req, token, error?.message || 'Previous add-on checkout could not be safely replaced.', 409);
+  }
+
   let lateTracking = null;
   const stripeExpiresAt = Math.floor(Date.now() / 1000) + 32 * 60;
   if (includeLate) {
     lateTracking = await reserveLateStaySlot({ submissionId: parsed.submissionId, ticketId: parsed.ticketId, expiresAt: new Date((stripeExpiresAt + 120) * 1000).toISOString() });
-    if (!lateTracking) return fail(req, token, 'Late Checkout / Car Camping tracking could not be prepared. Please try again.', 503);
+    if (!lateTracking) {
+      const error = new Error('Late Checkout / Car Camping tracking could not be prepared. Please try again.');
+      await markClaimFailed(orderStore, checkoutClaim, error);
+      await writeAudit('addon_bundle.checkout_failed', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, error: 'late_stay_tracking_unavailable' }).catch(() => {});
+      return fail(req, token, error.message, 503);
+    }
   }
 
   const currency = String(process.env.NOCTURNE_TICKET_CURRENCY || 'usd').toLowerCase();
@@ -115,22 +158,31 @@ export default async (req) => {
   if (includeLate) { params[`line_items[${index}][quantity]`] = '1'; params[`line_items[${index}][price_data][currency]`] = currency; params[`line_items[${index}][price_data][unit_amount]`] = String(lateConfig.priceCents); params[`line_items[${index}][price_data][product_data][name]`] = 'NOCTURNE Late Checkout / Car Camping — NON-REFUNDABLE'; params[`line_items[${index}][price_data][product_data][description]`] = `Stay on the property after the 3:00 AM event end until 10:00 AM. ${LATE_STAY_POLICY_TEXT}`; }
   const total = (includeDrink ? drinkConfig.priceCents : 0) + (includeWater ? waterConfig.priceCents : 0) + (includeLate ? lateConfig.priceCents : 0);
 
+  let createdSessionId = '';
+  let createdRecord = null;
+  let attached = false;
   try {
-    if (summary.addonBundleCheckoutStatus === 'checkout_created' && summary.addonBundleCheckoutSessionId) await stripe(`checkout/sessions/${encodeURIComponent(summary.addonBundleCheckoutSessionId)}/expire`, {}).catch(() => {});
     const session = await stripe('checkout/sessions', params, checkoutClaim.attempt.idempotencyKey);
+    createdSessionId = String(session.id || '');
     const now = new Date().toISOString();
     const expiresAt = session.expires_at ? new Date(Number(session.expires_at) * 1000).toISOString() : new Date(stripeExpiresAt * 1000).toISOString();
     const record = { purchaseType: 'addon-bundle', submissionId: parsed.submissionId, ticketId: parsed.ticketId, ticketSource: summary.ticketSource || review.ticketSource || null, stripeCheckoutSessionId: session.id, status: 'checkout_created', paymentStatus: session.payment_status || 'unpaid', amountTotal: total, currency, packagePolicyAccepted: true, drinkPackageRequested: includeDrink, drinkPackagePriceCents: includeDrink ? drinkConfig.priceCents : 0, waterPackageRequested: includeWater, waterPackagePriceCents: includeWater ? waterConfig.priceCents : 0, lateStayRequested: includeLate, lateStayPriceCents: includeLate ? lateConfig.priceCents : 0, lateStaySlot: lateTracking?.slot || null, lateStayReservationId: lateTracking?.reservationId || null, lateStayDepartureTime: includeLate ? lateConfig.departureTime : null, checkoutUrl: session.url, checkoutExpiresAt: expiresAt, selectionKey, createdAt: now, updatedAt: now };
+    createdRecord = record;
     await orderStore.setJSON(session.id, record);
     const write = await orderStore.setJSON(key, { ...summary, addonBundleCheckoutStatus: 'checkout_created', addonBundleCheckoutSessionId: session.id, addonBundleCheckoutUrl: session.url, addonBundleCheckoutExpiresAt: expiresAt, addonBundleSelectionKey: selectionKey, addonBundleDrinkPackageRequested: includeDrink, addonBundleWaterPackageRequested: includeWater, addonBundleLateStayRequested: includeLate, addonBundleLateStaySlot: lateTracking?.slot || null, addonBundleLateStayReservationId: lateTracking?.reservationId || null, updatedAt: now }, { onlyIfMatch: summaryEntry.etag });
     if (!write.modified) throw new Error('Ticket changed while add-on checkout was being prepared.');
+    attached = true;
     await orderStore.setJSON(checkoutClaim.key, { ...checkoutClaim.attempt, status: 'completed', stripeCheckoutSessionId: session.id, checkoutExpiresAt: expiresAt, updatedAt: now });
     await writeAudit('addon_bundle.checkout_created', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, stripeCheckoutSessionId: session.id, drinkPackageRequested: includeDrink, waterPackageRequested: includeWater, lateStayRequested: includeLate, amountTotal: total, ticketSource: summary.ticketSource || review.ticketSource || null });
     return browserForm(req) ? redirect(session.url) : json({ ok: true, checkoutUrl: session.url });
   } catch (error) {
+    if (createdSessionId && !attached) {
+      await stripe(`checkout/sessions/${encodeURIComponent(createdSessionId)}/expire`, {}).catch(() => {});
+      if (createdRecord) await orderStore.setJSON(createdSessionId, { ...createdRecord, status: 'checkout_conflict', checkoutUrl: null, updatedAt: new Date().toISOString() }).catch(() => {});
+    }
     if (lateTracking) await releaseLateStayReservation({ slot: lateTracking.slot, reservationId: lateTracking.reservationId, reason: 'addon_bundle_checkout_failed' }).catch(() => {});
-    await orderStore.setJSON(checkoutClaim.key, { ...checkoutClaim.attempt, status: 'failed', error: String(error?.message || error).slice(0, 500), updatedAt: new Date().toISOString() }).catch(() => {});
-    await writeAudit('addon_bundle.checkout_failed', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, error: String(error?.message || error) }).catch(() => {});
+    await markClaimFailed(orderStore, checkoutClaim, error);
+    await writeAudit('addon_bundle.checkout_failed', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, stripeCheckoutSessionId: createdSessionId || null, error: String(error?.message || error) }).catch(() => {});
     return fail(req, token, 'Add-on checkout could not be started. Please try again.', 502);
   }
 };
