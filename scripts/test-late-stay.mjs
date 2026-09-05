@@ -26,7 +26,7 @@ has(helper, 'unlimited: true', 'Late Stay config must report unlimited inventory
 has(helper, "LATE_STAY_DEPARTURE = '10:00 AM'", 'Late Stay departure must be 10:00 AM.');
 has(helper, "LATE_STAY_POLICY_LABEL = 'FINAL SALE / NON-REFUNDABLE'", 'Late Stay must remain final sale/non-refundable.');
 
-has(manager, 'name="late_stay"', 'Manage Add-Ons must expose Late Stay.');
+has(manager, "option(late, 'late_stay'", 'Manage Add-Ons must expose Late Stay.');
 has(manager, 'until 10:00 AM', 'Manage Add-Ons must show the 10:00 AM departure.');
 has(manager, 'Select any combination below and pay once through Stripe.', 'Manage Add-Ons must advertise one combined checkout.');
 lacks(manager, '30 spots', 'Manage Add-Ons must not mention the former capacity cap.');
