@@ -2,6 +2,7 @@ import { getStore } from '@netlify/blobs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { verifyTicketToken } from './_ticket-token.mjs';
 import { gateReadiness } from './_gate-readiness.mjs';
+import { waiverSigned } from './_waiver.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -40,6 +41,7 @@ export default async (req) => {
     if (!activeCandidate) continue;
 
     const gate = gateReadiness(summary, review);
+    const signed = waiverSigned(summary, review);
     const storedToken = tokenFromUrl(summary.digitalTicketUrl || review?.digitalTicketUrl || '');
     if (!storedToken) gate.errors.push('Stored digital ticket URL is missing a signed token.');
     else {
@@ -55,6 +57,9 @@ export default async (req) => {
       email: application?.email || '',
       source: gate.source,
       checkedIn: Boolean(summary.checkedInAt),
+      waiverSigned: signed,
+      waiverSignedAt: summary.waiverSignedAt || review?.waiverSignedAt || null,
+      waiverVersion: summary.waiverVersion || review?.waiverVersion || null,
       ready: gate.ready,
       errors: gate.errors,
       warnings: gate.warnings
@@ -76,6 +81,7 @@ export default async (req) => {
   const comp = ticketRows.filter((r) => r.source === 'comp');
   const notReady = ticketRows.filter((r) => !r.ready);
   const warnings = ticketRows.filter((r) => r.warnings.length);
+  const unsignedWaivers = ticketRows.filter((r) => !r.waiverSigned);
   return json({
     ok: true,
     generatedAt: new Date().toISOString(),
@@ -83,11 +89,14 @@ export default async (req) => {
       activeTickets: ticketRows.length,
       paidTickets: paid.length,
       compTickets: comp.length,
+      signedWaivers: ticketRows.length - unsignedWaivers.length,
+      unsignedWaivers: unsignedWaivers.length,
       readyForGate: ticketRows.length - notReady.length,
       blockedOrBroken: notReady.length,
       withWarnings: warnings.length,
       allReady: notReady.length === 0
     },
+    tickets: ticketRows,
     issues: notReady,
     warnings
   });
