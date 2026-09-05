@@ -105,7 +105,7 @@
     panel.innerHTML = `
       <div>
         <strong>Ticket-holder add-on campaign</strong>
-        <p class="admin-muted">Email current paid or checked-in ticket holders about eligible add-ons they do not already have: the $55 Six-Drink Package, $15 Unlimited Drinking Water, and $20 Late Checkout / Car Camping while its 30-person capacity remains available.</p>
+        <p class="admin-muted">Email current paid or checked-in ticket holders about eligible add-ons they do not already have: the $55 Six-Drink Package, $15 Unlimited Drinking Water, and $20 Late Checkout / Car Camping with unlimited inventory and a 10:00 AM departure deadline.</p>
       </div>
       <div>
         <button id="admin-send-bulk-drink-offer" class="admin-outline-button" type="button">Email Ticket Add-On Offer →</button>
@@ -129,8 +129,8 @@
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'The ticket add-on campaign could not be completed.');
-        const lateCapacity = data.lateStaySoldOut ? 'late stay sold out' : `${Number(data.lateStayRemaining || 0)} late-stay spots remaining`;
-        result.textContent = `Sent ${Number(data.sent || 0)} offer${Number(data.sent || 0) === 1 ? '' : 's'} · ${Number(data.multiOffers || 0)} multiple add-ons · ${Number(data.drinkOnly || 0)} drink only · ${Number(data.waterOnly || 0)} water only · ${Number(data.lateStayOnly || 0)} late stay only · ${lateCapacity} · ${Number(data.duplicate || 0)} already sent today · ${Number(data.ineligible || 0)} not eligible · ${Number(data.failed || 0)} failed`;
+        const lateAvailability = data.lateStayUnlimited ? 'late stay unlimited' : data.lateStaySoldOut ? 'late stay sold out' : 'late stay availability unavailable';
+        result.textContent = `Sent ${Number(data.sent || 0)} offer${Number(data.sent || 0) === 1 ? '' : 's'} · ${Number(data.multiOffers || 0)} multiple add-ons · ${Number(data.drinkOnly || 0)} drink only · ${Number(data.waterOnly || 0)} water only · ${Number(data.lateStayOnly || 0)} late stay only · ${lateAvailability} · ${Number(data.duplicate || 0)} already sent today · ${Number(data.ineligible || 0)} not eligible · ${Number(data.failed || 0)} failed`;
         if (Number(data.failed || 0) > 0) result.classList.add('error');
       } catch (error) {
         result.textContent = error.message || 'The ticket add-on campaign could not be completed.';
@@ -149,6 +149,6 @@
   }).observe(document.documentElement, { childList: true, subtree: true });
 })();
 
-import('/assets/js/admin-ticket-source-stats.js?v=20260901b').catch((error) => {
+import('/assets/js/admin-ticket-source-stats.js?v=20260905e').catch((error) => {
   console.warn('NOCTURNE ticket-holder stat enhancement unavailable:', error);
 });
