@@ -35,7 +35,7 @@ assert.ok(adminCampaign.includes('late stay unlimited'), 'Admin campaign result 
 
 assert.ok(publicInjector.includes('Approved admission is now $35.'), 'Public build must generate current $35 admission copy.');
 assert.ok(!publicInjector.includes('Ticket price increases tonight.'), 'Public build must not regenerate expired ticket-price urgency.');
-assert.ok(!publicInjector.includes('Limited to the first 30 purchasers.'), 'Public build must not regenerate the retired Late Stay cap.');
+assert.ok(!publicInjector.includes('<p>Stay on the property after the 3:00 AM event end until 8:00 AM. Limited to the first 30 purchasers.</p>'), 'Generated public Late Stay card must not regenerate the retired cap.');
 assert.ok(publicInjector.includes('until 10:00 AM'), 'Public build must use the current Late Stay departure time.');
 assert.ok(publicPricing.includes('normalizeText'), 'Runtime pricing must normalize stale cached copy to the current price.');
 
