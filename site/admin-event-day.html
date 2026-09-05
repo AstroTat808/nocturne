@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#030303">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Event Day Ready | NOCTURNE</title>
+  <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+  <link rel="stylesheet" href="/assets/css/styles.css">
+  <link rel="stylesheet" href="/assets/css/admin.css">
+  <link rel="stylesheet" href="/assets/css/admin-tickets.css">
+  <link rel="stylesheet" href="/assets/css/admin-gate.css?v=20260905b">
+  <script src="/assets/js/admin-event-day.js?v=20260905a" defer></script>
+</head>
+<body class="admin-body">
+  <header class="admin-topbar">
+    <a class="admin-brand" href="/admin" aria-label="Return to NOCTURNE admin">
+      <img class="admin-brand-logo" src="/assets/images/nocturne-logo-wordmark.png" alt="NOCTURNE Festival" width="2048" height="745">
+    </a>
+    <div class="admin-top-actions">
+      <a href="/check-in">Event Check-In ↗</a>
+      <a href="/bar">Bartender Console ↗</a>
+      <a href="/admin">← Operations desk</a>
+    </div>
+  </header>
+
+  <main class="admin-shell">
+    <section id="admin-event-day" class="admin-dashboard" hidden>
+      <div class="admin-heading-row">
+        <div>
+          <p class="admin-kicker">NOCTURNE operations</p>
+          <h1>Event day readiness.</h1>
+          <p class="admin-muted">A dedicated command view for gate integrity, signed waivers, bartender readiness, Stripe production status, and backups.</p>
+        </div>
+        <button id="event-day-refresh" class="admin-outline-button" type="button">Refresh All Checks</button>
+      </div>
+
+      <nav class="admin-operations-nav" aria-label="Event day operations">
+        <a class="admin-operation-card primary" href="/check-in"><strong>Event Check-In</strong><span>Open mobile QR scanner →</span></a>
+        <a class="admin-operation-card primary" href="/bar"><strong>Bartender Console</strong><span>Activate bands &amp; redeem credits →</span></a>
+        <a class="admin-operation-card" href="/admin"><strong>Guest Operations</strong><span>Tickets, waivers &amp; applicants →</span></a>
+        <a class="admin-operation-card" href="/admin-operations.html"><strong>Live Festival Dashboard</strong><span>Attendance, revenue &amp; exceptions →</span></a>
+      </nav>
+
+      <section class="event-day-ready" aria-labelledby="event-day-ready-title">
+        <div class="event-day-ready-head">
+          <div><p class="admin-kicker">Event Day Ready</p><h2 id="event-day-ready-title">Final command center.</h2></div>
+          <div id="event-day-ready-state" class="event-day-ready-state" data-state="blocked">CHECKING…</div>
+        </div>
+        <div id="event-day-ready-grid" class="event-day-ready-grid">
+          <article class="event-day-ready-card" data-state="blocked"><strong>Gate Readiness</strong><span>Checking…</span></article>
+          <article class="event-day-ready-card" data-state="blocked"><strong>Unsigned Waivers</strong><span>Checking…</span></article>
+          <article class="event-day-ready-card" data-state="blocked"><strong>Bartender</strong><span>Checking…</span></article>
+          <article class="event-day-ready-card" data-state="blocked"><strong>Stripe</strong><span>Checking…</span></article>
+          <article class="event-day-ready-card" data-state="blocked"><strong>Backups</strong><span>Checking…</span></article>
+        </div>
+      </section>
+
+      <section class="admin-gate-readiness" aria-labelledby="gate-readiness-title">
+        <div class="admin-gate-head">
+          <div><p class="admin-kicker">Gate readiness</p><h2 id="gate-readiness-title">Paid + comp ticket audit.</h2></div>
+          <button id="admin-gate-refresh" class="admin-outline-button" type="button">Run Gate Audit</button>
+        </div>
+        <div id="admin-gate-summary" class="admin-gate-summary" data-state="loading"><strong>CHECKING…</strong><span>Auditing active ticket records.</span></div>
+        <div id="admin-gate-metrics" class="admin-gate-metrics"></div>
+        <div id="admin-gate-issues" class="admin-gate-issues"></div>
+      </section>
+
+      <p id="event-day-status" class="admin-status" role="status" aria-live="polite">Checking admin session…</p>
+    </section>
+  </main>
+
+  <footer class="admin-footer">
+    <a class="admin-footer-brand" href="/" aria-label="NOCTURNE Festival home">
+      <img src="/assets/images/nocturne-logo-wordmark.png" alt="NOCTURNE Festival" width="2048" height="745" loading="lazy">
+    </a>
+    <p>Wild Ones &amp; Bass Babes Present · Event Day Operations</p>
+  </footer>
+</body>
+</html>
