@@ -14,9 +14,10 @@ const transition = read('netlify/functions/_addon-payment-transition.mjs');
 const refund = read('netlify/functions/admin-admission-refund.mjs');
 const netlify = read('netlify.toml');
 
-for (const name of ['drink_package', 'water_package', 'late_stay', 'package_policy']) {
-  assert.ok(manager.includes(`name="${name}"`), `Manage Add-Ons must include ${name}.`);
+for (const name of ['drink_package', 'water_package', 'late_stay']) {
+  assert.ok(manager.includes(`'${name}'`), `Manage Add-Ons must include ${name}.`);
 }
+assert.ok(manager.includes('name="package_policy"'), 'Manage Add-Ons must include one shared package_policy acknowledgment.');
 assert.ok(manager.includes('Checkout Selected Add-Ons →'), 'Manage Add-Ons must provide a single combined checkout action.');
 assert.ok(manager.includes('replace that checkout with a new combined checkout'), 'Open unpaid standalone checkouts must be replaceable.');
 assert.ok(checkout.includes("'metadata[purchaseType]': 'addon-bundle'"), 'Combined checkout must create addon-bundle Stripe sessions.');
