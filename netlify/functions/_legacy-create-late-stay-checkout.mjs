@@ -2,7 +2,7 @@ import { getStore } from '@netlify/blobs';
 import { randomBytes } from 'node:crypto';
 import { verifyTicketToken } from './_ticket-token.mjs';
 import { writeAudit } from './_audit.mjs';
-import { lateStayAddonEligible, lateStayAvailability, lateStayConfig, LATE_STAY_POLICY_TEXT, reconcileLateStayCheckout, releaseLateStayReservation, reserveLateStaySlot } from './_late-stay.mjs';
+import { lateStayAddonEligible, lateStayConfig, LATE_STAY_POLICY_TEXT, reconcileLateStayCheckout, releaseLateStayReservation, reserveLateStaySlot } from './_late-stay.mjs';
 
 const APPLICATION_STORE = 'nocturne-applications';
 const REVIEW_STORE = 'nocturne-application-reviews';
@@ -133,16 +133,14 @@ export default async (req) => {
     if (!lateStayAddonEligible(summary, review, parsed.ticketId)) return fail(req, 'Late Checkout / Car Camping checkout could not be refreshed. Please reload your digital ticket and try again.', 409);
   }
 
-  const availability = await lateStayAvailability();
-  if (availability.soldOut) return fail(req, 'Late Checkout / Car Camping is sold out. All 30 spots have been claimed or are currently reserved in checkout.', 409);
   const claim = await claimAttempt(orderStore, parsed.submissionId);
   if (!claim) return fail(req, 'Your Late Checkout / Car Camping checkout is already being prepared. Please wait a moment and try again.', 409);
   const stripeExpiresAt = Math.floor(Date.now() / 1000) + 32 * 60;
   const reservationExpiresAt = new Date((stripeExpiresAt + 120) * 1000).toISOString();
   const reservation = await reserveLateStaySlot({ submissionId: parsed.submissionId, ticketId: parsed.ticketId, expiresAt: reservationExpiresAt });
   if (!reservation) {
-    await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'failed', error: 'late_stay_sold_out', updatedAt: new Date().toISOString() }).catch(() => {});
-    return fail(req, 'Late Checkout / Car Camping is sold out. All 30 spots have been claimed or are currently reserved in checkout.', 409);
+    await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'failed', error: 'late_stay_tracking_unavailable', updatedAt: new Date().toISOString() }).catch(() => {});
+    return fail(req, 'Late Checkout / Car Camping checkout could not be prepared. Please try again.', 503);
   }
 
   const currency = String(process.env.NOCTURNE_TICKET_CURRENCY || 'usd').toLowerCase();
@@ -152,7 +150,7 @@ export default async (req) => {
     'metadata[submissionId]': parsed.submissionId, 'metadata[ticketId]': parsed.ticketId, 'metadata[event]': 'NOCTURNE', 'metadata[purchaseType]': 'late-stay-addon', 'metadata[lateStaySlot]': String(reservation.slot), 'metadata[lateStayReservationId]': reservation.reservationId, 'metadata[lateStayPolicyAccepted]': 'true',
     'payment_intent_data[metadata][submissionId]': parsed.submissionId, 'payment_intent_data[metadata][ticketId]': parsed.ticketId, 'payment_intent_data[metadata][event]': 'NOCTURNE', 'payment_intent_data[metadata][purchaseType]': 'late-stay-addon', 'payment_intent_data[metadata][lateStaySlot]': String(reservation.slot),
     'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': currency, 'line_items[0][price_data][unit_amount]': String(config.priceCents), 'line_items[0][price_data][product_data][name]': 'NOCTURNE Late Checkout / Car Camping — NON-REFUNDABLE',
-    'line_items[0][price_data][product_data][description]': `FINAL SALE / NON-REFUNDABLE. ${LATE_STAY_POLICY_TEXT} Limited to 30 guests. Stay on the property after the 3:00 AM event end until 8:00 AM. Each person remaining after 3:00 AM must have their own add-on.`
+    'line_items[0][price_data][product_data][description]': `FINAL SALE / NON-REFUNDABLE. ${LATE_STAY_POLICY_TEXT} Stay on the property after the 3:00 AM event end until 8:00 AM. Each person remaining after 3:00 AM must have their own add-on.`
   };
   if (!params.customer_email) delete params.customer_email;
 
@@ -169,8 +167,8 @@ export default async (req) => {
     const summaryWrite = await orderStore.setJSON(summaryKey, { ...latest, lateStayRequested: true, lateStayCheckoutStatus: 'checkout_created', lateStayCheckoutSessionId: session.id, lateStayCheckoutUrl: session.url, lateStayCheckoutExpiresAt: expiresAt, lateStayPriceCents: config.priceCents, lateStayPolicyAccepted: true, lateStaySlot: reservation.slot, lateStayReservationId: reservation.reservationId, lateStayDepartureTime: config.departureTime, updatedAt: createdAt }, { onlyIfMatch: latestEntry.etag });
     if (!summaryWrite.modified) throw new Error('Ticket eligibility changed while checkout was being prepared.');
     await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'completed', stripeCheckoutSessionId: session.id, lateStaySlot: reservation.slot, lateStayReservationId: reservation.reservationId, checkoutExpiresAt: expiresAt, updatedAt: createdAt });
-    await writeAudit('late_stay.checkout_created', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, stripeCheckoutSessionId: session.id, amountTotal: config.priceCents, slot: reservation.slot, capacity: config.capacity, finalSaleNonRefundable: true });
-    return browserFormPost(req) ? redirect(session.url) : json({ ok: true, checkoutUrl: session.url, slot: reservation.slot });
+    await writeAudit('late_stay.checkout_created', { submissionId: parsed.submissionId, ticketId: parsed.ticketId, stripeCheckoutSessionId: session.id, amountTotal: config.priceCents, trackingSlot: reservation.slot, unlimitedInventory: true, finalSaleNonRefundable: true });
+    return browserFormPost(req) ? redirect(session.url) : json({ ok: true, checkoutUrl: session.url });
   } catch (error) {
     await releaseLateStayReservation({ slot: reservation.slot, reservationId: reservation.reservationId, reason: 'checkout_creation_failed' }).catch(() => {});
     await orderStore.setJSON(claim.key, { ...claim.attempt, status: 'failed', error: String(error?.message || error).slice(0, 500), updatedAt: new Date().toISOString() }).catch(() => {});
