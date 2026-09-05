@@ -55,3 +55,7 @@
   if(list)new MutationObserver(()=>scheduleRefresh(250)).observe(list,{childList:true});
   refreshButton?.addEventListener('click',()=>scheduleRefresh(350)); scheduleRefresh(50);
 })();
+
+import('/assets/js/admin-gate.js?v=20260905b').catch((error) => {
+  console.warn('NOCTURNE gate/waiver admin enhancement unavailable:', error);
+});
