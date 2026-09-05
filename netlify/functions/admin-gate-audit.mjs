@@ -92,3 +92,5 @@ export default async (req) => {
     warnings
   });
 };
+
+export const config = { path: '/api/admin/gate-audit' };
