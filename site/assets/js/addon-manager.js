@@ -21,11 +21,13 @@
     }
     if (total) total.textContent = money(cents);
     if (count) count.textContent = selected ? `${selected} selected` : 'Nothing selected yet';
-    if (submit) submit.disabled = selected === 0 || Boolean(policy && !policy.checked);
+    if (submit) {
+      const shouldDisable = selected === 0 || Boolean(policy && !policy.checked);
+      if (submit.disabled !== shouldDisable) submit.disabled = shouldDisable;
+    }
   }
 
   for (const choice of choices) choice.querySelector('input[type="checkbox"]')?.addEventListener('change', sync);
   policy?.addEventListener('change', sync);
-  new MutationObserver(sync).observe(form, { attributes: true, subtree: true, attributeFilter: ['disabled'] });
   sync();
 })();
