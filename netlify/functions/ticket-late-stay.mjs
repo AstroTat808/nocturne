@@ -18,7 +18,7 @@ function json(data, status = 200) {
 }
 
 function checkoutPending(summary) {
-  if (summary?.lateStayPurchased || summary?.lateStayCheckoutStatus !== 'checkout_created') return false;
+  if (summary?.lateStayPurchased || summary?.lateStayCheckoutStatus !== 'checkout_created' || !summary?.lateStayCheckoutUrl) return false;
   const expiresAt = new Date(summary?.lateStayCheckoutExpiresAt || 0).getTime();
   return Number.isFinite(expiresAt) && expiresAt > Date.now();
 }
@@ -51,23 +51,20 @@ export default async (req) => {
 
   const availability = await lateStayAvailability();
   const pending = checkoutPending(summary);
-  const available = !pending && !availability.soldOut && lateStayAddonEligible(summary, review, parsed.ticketId) && Boolean(process.env.STRIPE_SECRET_KEY);
+  const available = !pending && lateStayAddonEligible(summary, review, parsed.ticketId) && Boolean(process.env.STRIPE_SECRET_KEY) && availability.enabled;
 
   return json({
     ok: true,
     purchased: Boolean(summary.lateStayPurchased),
     status: summary.lateStayPurchased ? (summary.lateStayStatus || 'active') : pending ? 'checkout_created' : 'none',
     paidAt: summary.lateStayPaidAt || null,
-    slot: summary.lateStayPurchased ? (summary.lateStaySlot || null) : null,
     departureTime: summary.lateStayDepartureTime || availability.departureTime,
     priceCents: availability.priceCents,
     price: `$${(availability.priceCents / 100).toFixed(0)}`,
-    capacity: availability.capacity,
-    sold: availability.sold,
-    reserved: availability.reserved,
-    remaining: availability.remaining,
-    soldOut: availability.soldOut,
+    unlimited: true,
+    soldOut: false,
     available,
-    checkoutPending: pending
+    checkoutPending: pending,
+    checkoutUrl: pending ? (summary.lateStayCheckoutUrl || null) : null
   });
 };
