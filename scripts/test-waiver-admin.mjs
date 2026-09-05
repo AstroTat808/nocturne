@@ -7,8 +7,9 @@ const audit = read('netlify/functions/admin-gate-audit.mjs');
 const reminder = read('netlify/functions/admin-waiver-reminders.mjs');
 const daily = read('netlify/functions/daily-waiver-reminders.mjs');
 const email = read('netlify/functions/_waiver-reminder-email.mjs');
-const adminGate = read('site/assets/js/admin-gate.js');
-const loader = read('site/assets/js/admin-ticket-source-stats.js');
+const adminWaiver = read('site/assets/js/admin-gate.js');
+const adminEventDay = read('site/assets/js/admin-event-day.js');
+const adminEventDayHtml = read('site/admin-event-day.html');
 
 assert.ok(audit.includes('waiverSigned: signed'), 'Gate audit must expose waiver status per ticket.');
 assert.ok(audit.includes('unsignedWaivers'), 'Gate audit must count unsigned waivers.');
@@ -34,14 +35,17 @@ assert.ok(email.includes('/ticket/waiver?token='), 'Waiver email must deep-link 
 assert.ok(email.includes('ticket QR and gate check-in remain unavailable'), 'Waiver email must clearly explain the entry lock.');
 assert.ok(email.includes('parent or legal guardian'), 'Waiver email must preserve guardian signing guidance.');
 
-assert.ok(adminGate.includes('Unsigned waiver'), 'Admin waiver filter must expose an Unsigned Waiver option.');
-assert.ok(adminGate.includes('Waiver signed'), 'Admin rows must support signed waiver badges.');
-assert.ok(adminGate.includes('Waiver unsigned'), 'Admin rows must support unsigned waiver badges.');
-assert.ok(adminGate.includes('admin-waiver-row-remind'), 'Unsigned admin rows must expose an individual reminder button.');
-assert.ok(adminGate.includes("confirm:'SEND WAIVER REMINDER'"), 'Individual reminder button must use the protected endpoint contract.');
-assert.ok(adminGate.includes('Event Day Ready'), 'Admin must expose the event-day command center.');
-assert.ok(adminGate.includes("fetch('/api/admin/launch'"), 'Event-day command center must read launch readiness.');
-for (const label of ['Gate Readiness', 'Unsigned Waivers', 'Bartender', 'Stripe', 'Backups']) assert.ok(adminGate.includes(label), `Event Day Ready must include ${label}.`);
-assert.ok(loader.includes("admin-gate.js?v=20260905c"), 'The live admin bundle must cache-bust the event-day readiness enhancement.');
+assert.ok(adminWaiver.includes('Unsigned waiver'), 'Main admin waiver filter must expose an Unsigned Waiver option.');
+assert.ok(adminWaiver.includes('Waiver signed'), 'Main admin rows must support signed waiver badges.');
+assert.ok(adminWaiver.includes('Waiver unsigned'), 'Main admin rows must support unsigned waiver badges.');
+assert.ok(adminWaiver.includes('admin-waiver-row-remind'), 'Unsigned main-admin rows must expose an individual reminder button.');
+assert.ok(adminWaiver.includes('SEND WAIVER REMINDER'), 'Individual reminder button must use the protected endpoint contract.');
+assert.ok(adminWaiver.includes('/admin-event-day.html'), 'Main admin must expose a link to the dedicated Event Day Ready page.');
+assert.ok(!adminWaiver.includes('Final command center.'), 'Main admin must no longer render Event Day Ready inline.');
 
-console.log('Waiver reminder schedule, individual action, badges, filter, and Event Day Ready regressions passed.');
+assert.ok(adminEventDayHtml.includes('Event Day Ready'), 'Dedicated page must visibly identify Event Day Ready.');
+assert.ok(adminEventDay.includes("readJson('/api/admin/gate-audit')"), 'Dedicated Event Day Ready page must read the protected gate audit.');
+assert.ok(adminEventDay.includes("readJson('/api/admin/launch')"), 'Dedicated Event Day Ready page must read launch readiness.');
+for (const label of ['Gate Readiness', 'Unsigned Waivers', 'Bartender', 'Stripe', 'Backups']) assert.ok(adminEventDay.includes(label), `Event Day Ready must include ${label}.`);
+
+console.log('Waiver reminder schedule, individual action, badges, filter, and separated Event Day Ready regressions passed.');
