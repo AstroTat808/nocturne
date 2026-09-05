@@ -2,6 +2,7 @@ import legacyRouter from './stripe-webhook-router.mjs';
 import { verifyStripeSignature } from './_stripe-signature.mjs';
 import { fulfillAddonBundle, expireAddonBundle } from './_addon-bundle.mjs';
 import { handleAddonPaymentTransition } from './_addon-payment-transition.mjs';
+import { fulfillStandaloneWater } from './_water-webhook.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed.', { status: 405 });
@@ -17,6 +18,10 @@ export default async (req) => {
     if ((event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') && object.payment_status === 'paid') await fulfillAddonBundle(object);
     if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') await expireAddonBundle(object);
     return Response.json({ received: true, addonBundle: true });
+  }
+
+  if (purchaseType === 'water-package-addon' && (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') && object.payment_status === 'paid') {
+    await fulfillStandaloneWater(object);
   }
 
   if (await handleAddonPaymentTransition(event)) return Response.json({ received: true, addonPaymentTransition: true });
