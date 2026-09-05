@@ -13,7 +13,9 @@ const waiverFn = read('netlify/functions/ticket-waiver.mjs');
 const checkin = read('netlify/functions/check-in.mjs');
 const checkinUi = read('site/check-in.html');
 const checkinJs = read('site/assets/js/check-in.js');
-const adminGate = read('site/assets/js/admin-gate.js');
+const adminWaiver = read('site/assets/js/admin-gate.js');
+const adminEventDay = read('site/assets/js/admin-event-day.js');
+const adminEventDayHtml = read('site/admin-event-day.html');
 const bar = read('netlify/functions/bar.mjs');
 const webhook = read('netlify/functions/stripe-webhook-router-v2.mjs');
 const transition = read('netlify/functions/_addon-payment-transition.mjs');
@@ -55,9 +57,13 @@ assert.ok(wallet.includes('Sign Required Waiver'), 'Apple Wallet must surface wa
 assert.ok(ticketWallet.includes('manageAddonsUrl'), 'Wallet generation must pass the ticket-specific Manage Add-Ons URL.');
 assert.ok(ticketWallet.includes('waiverUrl'), 'Wallet generation must pass the ticket-specific waiver URL.');
 
-assert.ok(adminGate.includes('/api/admin/gate-audit'), 'Admin dashboard panel must run the protected gate audit.');
-assert.ok(adminGate.includes('ALL TICKETS READY'), 'Admin gate panel must have an explicit green-ready state.');
-assert.ok(adminGate.includes('NEED ATTENTION'), 'Admin gate panel must have an explicit blocked state.');
+assert.ok(adminWaiver.includes('/admin-event-day.html'), 'Main admin must link to the dedicated Event Day Ready page.');
+assert.ok(!adminWaiver.includes('Final command center.'), 'Main admin enhancement must no longer render the Event Day Ready command center inline.');
+assert.ok(adminEventDayHtml.includes('Event day readiness.'), 'Dedicated Event Day Ready page must have its own operations view.');
+assert.ok(adminEventDay.includes('/api/admin/gate-audit'), 'Dedicated Event Day Ready page must run the protected gate audit.');
+assert.ok(adminEventDay.includes('/api/admin/launch'), 'Dedicated Event Day Ready page must read launch readiness.');
+assert.ok(adminEventDay.includes('ALL TICKETS READY'), 'Dedicated gate panel must have an explicit green-ready state.');
+assert.ok(adminEventDay.includes('NEED ATTENTION'), 'Dedicated gate panel must have an explicit blocked state.');
 
 assert.ok(bar.includes("fetchSite==='same-origin'"), 'Bartender console must accept valid custom-domain same-origin requests behind Netlify rewrites.');
 assert.ok(bar.includes("fetchSite==='cross-site'"), 'Bartender console must reject cross-site requests.');
