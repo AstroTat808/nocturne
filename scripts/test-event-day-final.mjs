@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { WAIVER_VERSION, WAIVER_TEXT, WAIVER_TEXT_HASH } from '../netlify/functions/_waiver.mjs';
+import { trustedWaiverSubmission } from '../netlify/functions/ticket-waiver.mjs';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const addons = read('netlify/functions/ticket-addons.mjs');
@@ -25,6 +26,14 @@ assert.match(WAIVER_TEXT, /gross negligence/i, 'Waiver must preserve non-waivabl
 assert.ok(waiverFn.includes('electronic_consent') && waiverFn.includes('risk_ack') && waiverFn.includes('truth_ack'), 'Waiver must require explicit e-sign, risk, and accuracy acknowledgments.');
 assert.ok(waiverFn.includes("action:'/ticket/waiver'") || waiverFn.includes('action="/ticket/waiver"'), 'Waiver must post to the ticket-specific waiver endpoint.');
 assert.ok(waiverFn.includes("ticket.waiver_signed"), 'Waiver signing must be audited.');
+
+const internalWaiverUrl = 'https://internal-function-host.netlify.app/ticket/waiver';
+assert.equal(trustedWaiverSubmission(new Request(internalWaiverUrl, { method: 'POST', headers: { origin: 'https://nocturnefestival.com', 'sec-fetch-site': 'same-origin' } })), true, 'Waiver must trust browser-reported same-origin POSTs even when Netlify rewrites the function URL.');
+assert.equal(trustedWaiverSubmission(new Request(internalWaiverUrl, { method: 'POST', headers: { origin: 'https://www.nocturnefestival.com', 'sec-fetch-site': 'same-site' } })), true, 'Waiver must accept same-site submissions from the supported public hostnames.');
+assert.equal(trustedWaiverSubmission(new Request(internalWaiverUrl, { method: 'POST', headers: { 'sec-fetch-site': 'none' } })), true, 'Waiver must permit direct/top-level browser submissions when Fetch Metadata reports none.');
+assert.equal(trustedWaiverSubmission(new Request(internalWaiverUrl, { method: 'POST', headers: { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' } })), false, 'Waiver must reject explicit cross-site submissions.');
+assert.equal(trustedWaiverSubmission(new Request(internalWaiverUrl, { method: 'POST', headers: { origin: 'https://nocturnefestival.com' } })), true, 'Waiver must retain exact public-Origin fallback for browsers without Fetch Metadata.');
+assert.equal(trustedWaiverSubmission(new Request(internalWaiverUrl, { method: 'POST', headers: { origin: 'https://evil.example' } })), false, 'Waiver fallback must reject an untrusted Origin.');
 
 assert.ok(ticketView.includes('QR LOCKED'), 'Unsigned digital tickets must keep the QR locked.');
 assert.ok(ticketView.includes('/ticket/waiver?token='), 'Digital ticket must link to the individual waiver.');
