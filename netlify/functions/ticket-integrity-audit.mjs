@@ -1,11 +1,16 @@
 import { getStore } from '@netlify/blobs';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, createPublicKey, timingSafeEqual, verify as verifySignature } from 'node:crypto';
 import { makeTicketToken, verifyTicketToken } from './_ticket-token.mjs';
 import { gateReadiness } from './_gate-readiness.mjs';
 import { waiverSigned } from './_waiver.mjs';
 
 const ORDER_STORE = 'nocturne-ticket-orders';
 const REVIEW_STORE = 'nocturne-application-reviews';
+const GITHUB_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
+const GITHUB_OIDC_AUDIENCE = 'nocturne-ticket-audit';
+const GITHUB_REPOSITORY = 'AstroTat808/nocturne';
+const GITHUB_REF = 'refs/heads/ticket-integrity-audit-20260905';
+let githubJwks = null;
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8', 'X-Robots-Tag': 'noindex,nofollow,noarchive' } });
@@ -18,10 +23,52 @@ function safeEqual(a = '', b = '') {
 function auditSecret() {
   return String(Netlify.env.get('NOCTURNE_TICKET_AUDIT_SECRET') || '');
 }
-function authorized(req) {
+function decodeJwtPart(value = '') {
+  try { return JSON.parse(Buffer.from(String(value), 'base64url').toString('utf8')); } catch { return null; }
+}
+function audienceMatches(aud) {
+  return Array.isArray(aud) ? aud.includes(GITHUB_OIDC_AUDIENCE) : aud === GITHUB_OIDC_AUDIENCE;
+}
+async function githubOidcAuthorized(req) {
+  const authorization = String(req.headers.get('authorization') || '');
+  if (!authorization.startsWith('Bearer ')) return false;
+  const token = authorization.slice(7).trim();
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  const [encodedHeader, encodedPayload, encodedSignature] = parts;
+  const header = decodeJwtPart(encodedHeader);
+  const payload = decodeJwtPart(encodedPayload);
+  if (!header || !payload || header.alg !== 'RS256' || !header.kid) return false;
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.iss !== GITHUB_OIDC_ISSUER || !audienceMatches(payload.aud)) return false;
+  if (payload.repository !== GITHUB_REPOSITORY || payload.ref !== GITHUB_REF) return false;
+  if (!Number.isFinite(Number(payload.exp)) || Number(payload.exp) <= now) return false;
+  if (payload.nbf && Number(payload.nbf) > now + 30) return false;
+  if (payload.iat && Number(payload.iat) > now + 30) return false;
+  try {
+    if (!githubJwks) {
+      const response = await fetch(`${GITHUB_OIDC_ISSUER}/.well-known/jwks`);
+      if (!response.ok) return false;
+      githubJwks = await response.json();
+    }
+    const jwk = githubJwks?.keys?.find((item) => item.kid === header.kid && item.kty === 'RSA');
+    if (!jwk) return false;
+    const key = createPublicKey({ key: jwk, format: 'jwk' });
+    return verifySignature(
+      'RSA-SHA256',
+      Buffer.from(`${encodedHeader}.${encodedPayload}`),
+      key,
+      Buffer.from(encodedSignature, 'base64url')
+    );
+  } catch {
+    return false;
+  }
+}
+async function authorized(req) {
   const expected = auditSecret();
   const supplied = String(req.headers.get('x-nocturne-audit-secret') || new URL(req.url).searchParams.get('key') || '');
-  return Boolean(expected && supplied && safeEqual(expected, supplied));
+  if (expected && supplied && safeEqual(expected, supplied)) return true;
+  return githubOidcAuthorized(req);
 }
 function tokenFromUrl(value = '') {
   try { return new URL(String(value)).searchParams.get('token') || ''; } catch { return ''; }
@@ -58,7 +105,7 @@ async function productionGet(path) {
 
 export default async (req) => {
   if (req.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
-  if (!authorized(req)) return json({ error: 'Unauthorized.' }, 401);
+  if (!(await authorized(req))) return json({ error: 'Unauthorized.' }, 401);
 
   const orderStore = getStore({ name: ORDER_STORE, consistency: 'strong' });
   const reviewStore = getStore({ name: REVIEW_STORE, consistency: 'strong' });
@@ -112,12 +159,11 @@ export default async (req) => {
       }
 
       const source = summary.ticketSource === 'comp' || /^NOC-TKT-COMP-/.test(String(summary.ticketId || '')) ? 'comp' : 'paid';
-      let admissionStripe = null;
       if (source === 'comp') {
         if (summary.stripePaymentIntentId) addIssue(issues, 'comp_has_admission_payment_intent', 'error');
         if (Number(summary.amountTotal || 0) !== 0) addIssue(issues, 'comp_has_nonzero_admission_amount', 'error', String(summary.amountTotal));
       } else if (summary.stripePaymentIntentId) {
-        admissionStripe = await stripeGet(`payment_intents/${encodeURIComponent(summary.stripePaymentIntentId)}`);
+        const admissionStripe = await stripeGet(`payment_intents/${encodeURIComponent(summary.stripePaymentIntentId)}`);
         if (!admissionStripe.ok) addIssue(issues, 'admission_payment_intent_lookup_failed', 'error', admissionStripe.error || 'unknown');
         else if (admissionStripe.data.status !== 'succeeded') addIssue(issues, 'admission_payment_not_succeeded', 'error', String(admissionStripe.data.status || 'missing'));
       } else {
