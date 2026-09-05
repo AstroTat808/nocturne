@@ -10,16 +10,16 @@ function escapeHtml(value = '') {
 
 function page({ confirmed = false, pending = false, cancelled = false, message = '', amount = '' }) {
   const kicker = confirmed ? 'Late Stay Confirmed' : pending ? 'Finalizing Purchase' : cancelled ? 'Checkout Canceled' : 'Late Stay Status';
-  const heading = confirmed ? 'You can stay until 8:00 AM.' : pending ? 'Payment is being verified.' : cancelled ? 'No charge was made.' : 'We could not confirm that add-on.';
+  const heading = confirmed ? 'You can stay until 10:00 AM.' : pending ? 'Payment is being verified.' : cancelled ? 'No charge was made.' : 'We could not confirm that add-on.';
   const status = confirmed
-    ? `<div class="private-access-status"><strong>Late Checkout / Car Camping Added</strong>${amount ? `<br>${escapeHtml(amount)}` : ''}</div><div class="private-access-status"><strong>Departure deadline: 8:00 AM</strong><br>Each person remaining on the property after 3:00 AM must have this add-on attached to their own ticket.</div>`
+    ? `<div class="private-access-status"><strong>Late Checkout / Car Camping Added</strong>${amount ? `<br>${escapeHtml(amount)}` : ''}</div><div class="private-access-status"><strong>Departure deadline: 10:00 AM</strong><br>Each person remaining on the property after 3:00 AM must have this add-on attached to their own ticket.</div>`
     : pending
       ? '<div class="private-access-status"><strong>Finalizing your late-stay add-on…</strong><br>This page will refresh automatically.</div>'
       : cancelled
         ? '<div class="private-access-status"><strong>Checkout canceled.</strong><br>Your existing admission ticket remains unchanged.</div>'
         : `<div class="private-access-status"><strong>${escapeHtml(message || 'Late-stay confirmation was not found.')}</strong></div>`;
   const copy = confirmed
-    ? 'Reopen or refresh your original digital ticket to see the Late Checkout / Car Camping entitlement. You may remain on the NOCTURNE property after the 3:00 AM event end until 8:00 AM, including resting or sleeping in your vehicle where directed by event staff.'
+    ? 'Reopen or refresh your original digital ticket to see the Late Checkout / Car Camping entitlement. You may remain on the NOCTURNE property after the 3:00 AM event end until 10:00 AM, including resting or sleeping in your vehicle where directed by event staff.'
     : cancelled
       ? 'You can return to your digital ticket if you decide to add Late Checkout / Car Camping.'
       : pending
