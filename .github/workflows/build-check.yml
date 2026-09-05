@@ -14,23 +14,25 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-
       - name: Syntax checks
         run: npm run check
-
-      - name: Regression tests
-        run: npm test
-
+      - name: Hardening baseline test
+        run: node scripts/test-hardening.mjs
+      - name: Existing feature regressions
+        run: node scripts/test-water-package.mjs && node scripts/test-package-policy.mjs && node scripts/test-shared-checkout.mjs && node scripts/test-late-stay.mjs && node scripts/test-manage-addons.mjs
+      - name: Gate waiver regression
+        run: node scripts/test-gate-readiness.mjs
+      - name: Event-day final regression
+        run: node scripts/test-event-day-final.mjs
+      - name: Remaining regression suite
+        run: node scripts/test-ticket-pricing.mjs && node scripts/test-operations-metrics.mjs && node scripts/test-rehearsal-checklist.mjs && node scripts/test-launch-readiness.mjs && node scripts/test-branding.mjs && node scripts/test-addon-revenue.mjs
       - name: Preflight
         run: npm run preflight
-
       - name: Full production build
         run: npm run build
